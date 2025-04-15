@@ -18,7 +18,7 @@ from langgraph.prebuilt import create_react_agent
 from pydantic import BaseModel, Field
 from langchain.output_parsers import PydanticOutputParser
 from langchain_core.prompts import PromptTemplate
-
+from langchain.prompts import ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate
 # Define structured output models
 class LogEntry(BaseModel):
     message: str = Field(description="The log message content")
@@ -64,9 +64,12 @@ def fetch_service_status():
     """Checks service health using the service checker tool."""
     return check_services()
 
+instructions = output_parser.get_format_instructions()
+escaped_instructions = instructions.replace("{", "{{").replace("}", "}}")
 
-system_message = f"""
-You are a DevOps assistant designed to help with system monitoring and troubleshooting. 
+system_message = SystemMessagePromptTemplate.from_template(
+    f"""
+ You are a DevOps assistant designed to help with system monitoring and troubleshooting. 
 Your primary objectives are:
 1. Provide clear and concise information about system health
 2. Use available tools to investigate system issues
@@ -80,22 +83,25 @@ When using tools:
 - Suggest next steps if potential issues are detected
 
 CRITICAL: At the end of your analysis, you MUST provide a standardized report in JSON format exactly as specified here:
-{output_parser.get_format_instructions()}
+{escaped_instructions}
 
 Do not include any text before or after the JSON structure. The JSON should be the only content in your final response.
 
 Constraints:
 - Never attempt to execute potentially dangerous commands
 - Protect system security at all times
-- If unsure about a command or its implications, ask for clarification
+- If unsure about a command or its implications, ask for clarification   
 """
+)
+prompt = ChatPromptTemplate.from_messages([
+    system_message,
+    HumanMessagePromptTemplate.from_template("{messages}")
+])
 # Initialize LLM
 llm = ChatLiteLLM(
     model_name="gpt-4o",
     api_base=os.getenv("API_BASE"),
     api_key=os.getenv("API_KEY")
-).bind(
-    messages=[SystemMessage(content=system_message)]
 )
 # Set up tools
 tools = [fetch_logs, fetch_service_status, execute_shell_command]
@@ -107,7 +113,8 @@ memory = MemorySaver()
 graph = create_react_agent(
     llm,
     tools=tools,
-    checkpointer=memory
+    checkpointer=memory,
+    prompt=prompt
 )
 
 # Configuration
@@ -198,7 +205,6 @@ def run_agent(interactive: bool = True):
         # Run the first query automatically
         response = graph.invoke({"messages": initial_query}, config)
         agent_response = response["messages"][-1].content
-
         try:
             # Try to parse the response into structured format
             structured_output = output_parser.parse(agent_response)
@@ -232,14 +238,14 @@ def run_agent(interactive: bool = True):
                 # Process the user query through the agent
                 response = graph.invoke({"messages": user_input}, config)
                 agent_response = response["messages"][-1].content
-                # try:
-                #     # Try to parse the response into structured format
-                #     structured_output = output_parser.parse(agent_response)
-                #     display_structured_output(structured_output)
-                # except Exception as e:
-                #     # Fall back to normal display if parsing fails
-                #     typer.echo("\n🤖 Agent response (raw format):")
-                #     display_typing_effect(agent_response)
+                try:
+                    # Try to parse the response into structured format
+                    structured_output = output_parser.parse(agent_response)
+                    display_structured_output(structured_output)
+                except Exception as e:
+                    # Fall back to normal display if parsing fails
+                    typer.echo("\n🤖 Agent response (raw format):")
+                    display_typing_effect(agent_response)
                 
                 typer.echo("\n🤖 Agent response:")
                 display_typing_effect(agent_response)
