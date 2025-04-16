@@ -60,9 +60,9 @@ def get_recent_logs(log_files: List[str]) -> List[str]:
         for f in {files_str}; do 
             echo -e "\\n--- $f ---"; 
             if [[ $f == *.gz ]]; then 
-                zcat \"$f\" | tail -n 10; 
+                zcat \"$f\" | tail -n 5; 
             else 
-                tail -n 10 \"$f\"; 
+                tail -n 5 \"$f\"; 
             fi; 
         done
         """
@@ -105,7 +105,7 @@ def check_logs_once(
     if log_files is None:
         log_files = [
             "/var/log/deriv/*",
-            "/var/log/deriv/*"
+            "/var/log/httpd/*"
         ]
     
     # Get the log lines

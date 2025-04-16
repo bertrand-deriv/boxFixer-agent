@@ -11,6 +11,7 @@ from langchain_core.messages import SystemMessage
 from log_monitor_tool import check_logs_once
 from service_health_check_tool import check_services
 from command_executor_tool import execute_shell_command
+from resource_monitoring_tool import check_system_resources
 from dotenv import load_dotenv
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.prebuilt import create_react_agent
@@ -20,30 +21,35 @@ from langchain.output_parsers import PydanticOutputParser
 from langchain_core.prompts import PromptTemplate
 from langchain.prompts import ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate
 # Define structured output models
-class LogEntry(BaseModel):
-    message: str = Field(description="The log message content")
-    timestamp: Optional[str] = Field(description="Timestamp of the log entry if available")
-    source: Optional[str] = Field(description="Source file or service that generated the log")
+# class LogEntry(BaseModel):
+#     message: str = Field(description="The log message content")
+#     timestamp: Optional[str] = Field(description="Timestamp of the log entry if available")
+#     source: Optional[str] = Field(description="Source file or service that generated the log")
     
-class LogsOutput(BaseModel):
-    errors: List[LogEntry] = Field(description="List of error log entries")
-    warnings: List[LogEntry] = Field(description="List of warning log entries")
+# class LogsOutput(BaseModel):
+#     errors: List[LogEntry] = Field(description="List of error log entries")
+#     warnings: List[LogEntry] = Field(description="List of warning log entries")
 
 class ServiceStatus(BaseModel):
     name: str = Field(description="Name of the service")
     status: str = Field(description="Current status (running, stopped, error, etc.)")
     details: Optional[str] = Field(description="Additional details about the service status")
 
+class ResourceStatus(BaseModel):
+    cpu_usage: str = Field(description="CPU usage")
+    memory_usage: str = Field(description="Memory usage")
+
 class ServicesOutput(BaseModel):
-    kyc_services: List[ServiceStatus] = Field(description="KYC-related services")
-    hydra_services: List[ServiceStatus] = Field(description="Hydra-related services")
+    kyc_services: Optional[List[ServiceStatus]] = Field(description="Any service that has word 'kyc' in its name. If there's none, return null")
+    hydra_services: Optional[List[ServiceStatus]] = Field(description="Any service that word 'hydra' in its name. If there's none, return null")
     other_services: List[ServiceStatus] = Field(description="Other miscellaneous services")
 
 class MonitoringReport(BaseModel):
-    logs: LogsOutput = Field(description="Categorized log entries")
+    # logs: LogsOutput = Field(description="Categorized log entries")
     services: ServicesOutput = Field(description="Categorized service statuses")
-    summary: str = Field(description="Brief summary of system health")
-    recommendations: List[str] = Field(description="Recommended actions based on findings")
+    resources: ResourceStatus = Field(description="Brief interpretation of system resource usage")
+    summary: str = Field(description="Brief summary of system health.")
+    recommendations: List[str] = Field(description="Recommended actions based on findings. You Should excplicity state whether to rebuild QAbox or not depending on how long services has been running and CPU and/or memory is at bottleneck")
     
 # Initialize the parser
 output_parser = PydanticOutputParser(pydantic_object=MonitoringReport)
@@ -69,29 +75,37 @@ escaped_instructions = instructions.replace("{", "{{").replace("}", "}}")
 
 system_message = SystemMessagePromptTemplate.from_template(
     f"""
- You are a DevOps assistant designed to help with system monitoring and troubleshooting. 
-Your primary objectives are:
-1. Provide clear and concise information about system health
-2. Use available tools to investigate system issues
-3. Offer actionable recommendations
-4. Communicate in a professional and helpful manner
+        You are a DevOps assistant designed to help with system monitoring and troubleshooting. 
+        Your primary objectives are:
+        1. Provide clear and concise information about system health
+        2. Use available tools to investigate system issues
+        3. Offer actionable recommendations
+        4. Communicate in a helpful manner
 
-When using tools:
-- Always explain what tool you're using and why
-- Interpret tool results in a meaningful context
-- Provide clear explanations of any findings
-- Suggest next steps if potential issues are detected
+        When using tools:
+        - Always explain what tool you're using and why
+        - Interpret tool results in a meaningful context
+        - Provide clear explanations of any findings
+        - Suggest next steps if potential issues are detected
 
-CRITICAL: At the end of your analysis, you MUST provide a standardized report in JSON format exactly as specified here:
-{escaped_instructions}
+        Tools available and their purpose:
+        - fetch_logs: Use this tool to get system logs including docker containers
+        - fetch_service_status: Use this tool to get different service statuses including system statuses, docker services, k8s pods
+                                Use this tool also to advice whether the host (QAbox) needs a rebuild. If more than 2 services has been 
+                                running for 5 days its advisable to rebuild the QAbox
+        - execute_shell_command: Use this tool to execute commands in terminal. Always ask for user approval before executing command.
+        - check_system_resources: Use this tool to check system resource usage. If there's any red flags, report them. It is advisable to rebuild
+                                  QAbox when CPU and/or memory is at bottleneck.
 
-Do not include any text before or after the JSON structure. The JSON should be the only content in your final response.
+        CRITICAL: At the end of your analysis, you MUST provide a standardized report in JSON format exactly as specified here:
+        {escaped_instructions}
+        Do not include any text before or after the JSON structure. The JSON should be the only content in your final response.
 
-Constraints:
-- Never attempt to execute potentially dangerous commands
-- Protect system security at all times
-- If unsure about a command or its implications, ask for clarification   
-"""
+        Constraints:
+        - Never attempt to execute potentially dangerous commands
+        - Always ask for user approval before executing any command
+        - If unsure about a command or its implications, ask for clarification   
+    """
 )
 prompt = ChatPromptTemplate.from_messages([
     system_message,
@@ -104,7 +118,7 @@ llm = ChatLiteLLM(
     api_key=os.getenv("API_KEY")
 )
 # Set up tools
-tools = [fetch_logs, fetch_service_status, execute_shell_command]
+tools = [ fetch_service_status, execute_shell_command, check_system_resources] # removed fetch_logs
 
 # Initialize memory
 memory = MemorySaver()
@@ -130,46 +144,69 @@ def display_structured_output(structured_output):
     print(f"📋 SUMMARY: {structured_output.summary}\n")
     
     # Display logs
-    print("🔴 ERRORS:")
-    if structured_output.logs.errors:
-        for error in structured_output.logs.errors:
-            source = f" [{error.source}]" if error.source else ""
-            timestamp = f" at {error.timestamp}" if error.timestamp else ""
-            print(f"  - {error.message}{source}{timestamp}")
-    else:
-        print("  No errors found")
+    # print("🔴 ERRORS:")
+    # if structured_output.logs.errors:
+    #     for error in structured_output.logs.errors:
+    #         source = f" [{error.source}]" if error.source else ""
+    #         timestamp = f" at {error.timestamp}" if error.timestamp else ""
+    #         print(f"  - {error.message}{source}{timestamp}")
+    # else:
+    #     print("  No errors found")
     
-    print("\n🟠 WARNINGS:")
-    if structured_output.logs.warnings:
-        for warning in structured_output.logs.warnings:
-            source = f" [{warning.source}]" if warning.source else ""
-            timestamp = f" at {warning.timestamp}" if warning.timestamp else ""
-            print(f"  - {warning.message}{source}{timestamp}")
-    else:
-        print("  No warnings found")
+    # print("\n🟠 WARNINGS:")
+    # if structured_output.logs.warnings:
+    #     for warning in structured_output.logs.warnings:
+    #         source = f" [{warning.source}]" if warning.source else ""
+    #         timestamp = f" at {warning.timestamp}" if warning.timestamp else ""
+    #         print(f"  - {warning.message}{source}{timestamp}")
+    # else:
+    #     print("  No warnings found")
     
     # Display services
     print("\n🔷 KYC SERVICES:")
-    for svc in structured_output.services.kyc_services:
-        status_emoji = "✅" if svc.status.lower() == "running" else "❌"
-        print(f"  {status_emoji} {svc.name} - {svc.status}")
-        if svc.details:
-            print(f"     {svc.details}")
+    if structured_output.services.kyc_services:
+        sorted_services = sorted(
+            structured_output.services.kyc_services,
+            key=lambda svc: 0 if svc.status.lower() != "running" else 1
+        )
+        
+        for svc in sorted_services:
+            status_emoji = "✅" if svc.status.lower() == "running" else "❌"
+            print(f"  {status_emoji} {svc.name} - {svc.status}")
+            if svc.details:
+                print(f"     {svc.details}")
+    else: 
+        print("There's no KYC related services available")
     
     print("\n🔶 HYDRA SERVICES:")
-    for svc in structured_output.services.hydra_services:
-        status_emoji = "✅" if svc.status.lower() == "running" else "❌"
-        print(f"  {status_emoji} {svc.name} - {svc.status}")
-        if svc.details:
-            print(f"     {svc.details}")
+    if structured_output.services.hydra_services:
+        sorted_services = sorted(
+            structured_output.services.hydra_services,
+            key=lambda svc: 0 if svc.status.lower() != "running" else 1
+        )
+        for svc in sorted_services:
+            status_emoji = "✅" if svc.status.lower() == "running" else "❌"
+            print(f"  {status_emoji} {svc.name} - {svc.status}")
+            if svc.details:
+                print(f"     {svc.details}")
+    else:
+        print("There's no Hydra related services available")
     
     print("\n⚪ OTHER SERVICES:")
-    for svc in structured_output.services.other_services:
+    sorted_services = sorted(
+        structured_output.services.other_services,
+        key=lambda svc: 0 if svc.status.lower() != "running" else 1
+    )
+    for svc in sorted_services:
         status_emoji = "✅" if svc.status.lower() == "running" else "❌"
         print(f"  {status_emoji} {svc.name} - {svc.status}")
         if svc.details:
             print(f"     {svc.details}")
-    
+
+    # Display resouces
+    print("\n🔋 SYSTEM RESOURCES:")
+    print(f"  {structured_output.resources}\n")
+
     # Display recommendations
     print("\n💡 RECOMMENDATIONS:")
     for i, rec in enumerate(structured_output.recommendations, 1):
@@ -198,7 +235,7 @@ def run_agent(interactive: bool = True):
     typer.echo("📊 Initializing systems...")
     
     # First automated query to check logs and service status
-    initial_query = "As DevOps assistant agent, give me the report of the current logs and the service health check"
+    initial_query = "As DevOps assistant agent, give me the report of the service health check and advise when QAbox is in ready status to start testing"
     typer.echo(f"\n🔍 Running initial check: '{initial_query}'")
     
     try:
