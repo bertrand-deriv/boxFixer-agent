@@ -339,3 +339,15 @@ if __name__ == "__main__":
     ╚════════════════════════════════════╝
     """)
     app()
+
+
+
+"""
+1. Take out the Pydantic classes
+2. Restructure the system prompt to be more generic and migrate most of
+   its part into the human message.
+3. Know whether to return a structured response or not
+4. Remove unused packages, prints, comments, loggings,etc
+5. 
+
+"""
