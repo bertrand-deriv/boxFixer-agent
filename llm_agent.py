@@ -16,6 +16,8 @@ from dotenv import load_dotenv
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.prebuilt import create_react_agent
 
+from kyc_troubleshooting_tool import troubleshoot_kyc
+
 from pydantic import BaseModel, Field
 from langchain.output_parsers import PydanticOutputParser
 from langchain_core.prompts import PromptTemplate
@@ -96,6 +98,7 @@ system_message = SystemMessagePromptTemplate.from_template(
         - execute_shell_command: Use this tool to execute commands in terminal. Always ask for user approval before executing command.
         - check_system_resources: Use this tool to check system resource usage. If there's any red flags, report them. It is advisable to rebuild
                                   QAbox when CPU and/or memory is at bottleneck.
+        - troubleshoot_kyc: Use this to troubleshoot the kyc service
 
         CRITICAL: At the end of your analysis, you MUST provide a standardized report in JSON format exactly as specified here:
         {escaped_instructions}
@@ -118,7 +121,7 @@ llm = ChatLiteLLM(
     api_key=os.getenv("API_KEY")
 )
 # Set up tools
-tools = [ fetch_service_status, execute_shell_command, check_system_resources] # removed fetch_logs
+tools = [ fetch_service_status, execute_shell_command, check_system_resources, troubleshoot_kyc ] # removed fetch_logs
 
 # Initialize memory
 memory = MemorySaver()
@@ -235,7 +238,7 @@ def run_agent(interactive: bool = True):
     typer.echo("📊 Initializing systems...")
     
     # First automated query to check logs and service status
-    initial_query = "As DevOps assistant agent, give me the report of the service health check and advise when QAbox is in ready status to start testing"
+    initial_query = "As DevOps assistant agent, give the report of the service health check and advise when QAbox is in ready status to start testing"
     typer.echo(f"\n🔍 Running initial check: '{initial_query}'")
     
     try:

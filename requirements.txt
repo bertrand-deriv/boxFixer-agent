@@ -49,3 +49,4 @@ zstandard==0.23.0
 langchain-community
 langchain-openai
 litellm
+langchain
