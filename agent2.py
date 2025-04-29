@@ -1,268 +1,585 @@
-#!/usr/bin/env python
-"""
-DevOps Troubleshooter Agent CLI
---------------------------------
-A command-line interface for interacting with the DevOps Troubleshooter Agent.
-"""
-
 import os
-import sys
-import argparse
-import json
-from typing import List, Optional
-import readline  # For better command line editing experience
+from typing import Dict, List, Any, Tuple, Optional
+from enum import Enum
+import time
 
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
+from langchain_openai import ChatOpenAI
+from pydantic import BaseModel, Field
+from langchain_community.chat_models import ChatLiteLLM
+from langgraph.graph import StateGraph, END
 
-# Import the agent
-from devops_agent import create_devops_agent
+from langgraph.checkpoint.memory import MemorySaver
+from dotenv import load_dotenv
 
-class DevOpsAgentCLI:
-    """Command-line interface for the DevOps Agent."""
+# Load environment variables
+load_dotenv()
+
+# Define the state for our graph
+class AgentState(BaseModel):
+    problem: str = Field(description="The problem description from the user")
+    plan: List[str] = Field(default_factory=list, description="Step-by-step troubleshooting plan")
+    current_step_index: int = Field(default=0, description="Index of the current step in the plan")
+    execution_results: List[Dict[str, str]] = Field(default_factory=list, description="Results of executed commands")
+    analysis: List[str] = Field(default_factory=list, description="Analysis of executed steps")
+    suggested_actions: List[str] = Field(default_factory=list, description="Suggested remediation actions")
+    user_input: str = Field(default="", description="Latest input from the user")
+    history: List[str] = Field(default_factory=list, description="History of previous troubleshooting sessions")
+    current_state: str = Field(default="initial", description="Current state of the agent workflow")
+
+llm = ChatLiteLLM(
+    model_name="gpt-4.1-mini",
+    api_base=os.getenv("API_BASE"),
+    api_key=os.getenv("API_KEY")
+)
+
+# Define action nodes for our graph
+def create_plan(state: AgentState) -> AgentState:
+    """Generate a troubleshooting plan based on the problem description"""
     
-    def __init__(self, api_key: Optional[str] = None):
-        """Initialize the CLI."""
-        # Set API key if provided
-        if api_key:
-            os.environ["OPENAI_API_KEY"] = api_key
+    plan_prompt = ChatPromptTemplate.from_template(
+        """You are a DevOps assistant agent trying to troubleshoot a server issue.
         
-        # Create the agent
-        self.agent = create_devops_agent()
+        Problem: {problem}
         
-        # Initialize conversation history
-        self.conversation_history: List[BaseMessage] = []
+        Generate a detailed step-by-step troubleshooting plan. Focus on diagnostic commands 
+        that would help identify the root cause. Include commands like checking service status,
+        viewing logs, checking resource usage, etc.
         
-        # Initialize readline history
-        readline.set_history_length(1000)
-        
-        # Terminal colors
-        self.colors = {
-            "reset": "\033[0m",
-            "bold": "\033[1m",
-            "underline": "\033[4m",
-            "red": "\033[91m",
-            "green": "\033[92m",
-            "yellow": "\033[93m",
-            "blue": "\033[94m",
-            "magenta": "\033[95m",
-            "cyan": "\033[96m",
-        }
+        Return ONLY a numbered list of steps, with each step being a specific command or action.
+        """
+    )
     
-    def print_header(self):
-        """Print the CLI header."""
-        header = f"""
-{self.colors['bold']}{self.colors['cyan']}=================================================={self.colors['reset']}
-{self.colors['bold']}{self.colors['cyan']}       DevOps Troubleshooter Agent CLI{self.colors['reset']}
-{self.colors['bold']}{self.colors['cyan']}=================================================={self.colors['reset']}
-{self.colors['green']}
-Type your DevOps issues or questions below.
-Use /help to see available commands.
-Use /exit or Ctrl+C to quit.
-{self.colors['reset']}
-"""
-        print(header)
+    plan_chain = plan_prompt | llm | StrOutputParser()
     
-    def print_help(self):
-        """Print help information."""
-        help_text = f"""
-{self.colors['bold']}{self.colors['yellow']}Available Commands:{self.colors['reset']}
-{self.colors['yellow']}/help{self.colors['reset']}     - Show this help message
-{self.colors['yellow']}/exit{self.colors['reset']}     - Exit the application
-{self.colors['yellow']}/clear{self.colors['reset']}    - Clear the conversation history
-{self.colors['yellow']}/save{self.colors['reset']}     - Save conversation to a file
-{self.colors['yellow']}/load{self.colors['reset']}     - Load conversation from a file
-{self.colors['yellow']}/history{self.colors['reset']}  - Show conversation history
-{self.colors['yellow']}/tools{self.colors['reset']}    - List available troubleshooting tools
-"""
-        print(help_text)
+    result = plan_chain.invoke({"problem": state.problem})
     
-    def print_tools(self):
-        """Print information about available tools."""
-        tools_text = f"""
-{self.colors['bold']}{self.colors['yellow']}Available Troubleshooting Tools:{self.colors['reset']}
-{self.colors['yellow']}check_system_resource_usage{self.colors['reset']} - Check CPU, memory, disk, or network usage
-{self.colors['yellow']}check_logs{self.colors['reset']} - Retrieve logs for a specific service
-{self.colors['yellow']}check_service_status{self.colors['reset']} - Check if a service is running correctly
-{self.colors['yellow']}run_network_diagnostics{self.colors['reset']} - Test connectivity, latency, or routing to a target
-{self.colors['yellow']}check_configuration{self.colors['reset']} - Retrieve configuration for a system component
-{self.colors['yellow']}search_documentation{self.colors['reset']} - Find relevant information in documentation
-"""
-        print(tools_text)
+    # Convert the result into a list of steps
+    steps = []
+    for line in result.split("\n"):
+        line = line.strip()
+        if line and (line[0].isdigit() or line.startswith("-")):
+            # Remove numbering/bullets and clean up
+            cleaned_step = line.split(".", 1)[-1].strip() if "." in line else line[1:].strip()
+            steps.append(cleaned_step)
     
-    def save_conversation(self, filename: str):
-        """Save the conversation history to a file."""
-        if not filename.endswith('.json'):
-            filename += '.json'
-        
-        serializable_history = []
-        for msg in self.conversation_history:
-            serializable_history.append({
-                "type": msg.type,
-                "content": msg.content
-            })
-        
-        with open(filename, 'w') as f:
-            json.dump(serializable_history, f, indent=2)
-        
-        print(f"{self.colors['green']}Conversation saved to {filename}{self.colors['reset']}")
+    # Update the state
+    state.plan = steps
+    state.current_state = "plan_created"
+    return state
+
+def present_plan(state: AgentState) -> AgentState:
+    """Present the plan to the user and get feedback"""
     
-    def load_conversation(self, filename: str):
-        """Load a conversation history from a file."""
-        if not filename.endswith('.json'):
-            filename += '.json'
+    print("\n🧠 PROPOSED TROUBLESHOOTING PLAN")
+    for i, step in enumerate(state.plan, 1):
+        print(f"{i}. {step}")
+    
+    print("\n👀 PLAN FEEDBACK")
+    print("Do you approve this plan? You can:")
+    print("- Type 'yes' to approve the plan")
+    print("- Type 'no' to reject and create a new plan")
+    print("- Provide specific feedback to modify the plan")
+    print("- Add additional commands you want included")
+    
+    user_input = input("> ")
+    state.user_input = user_input
+    state.current_state = "plan_feedback_received"
+    
+    return state
+
+def process_plan_feedback(state: AgentState) -> AgentState:
+    """Process user feedback on the plan"""
+    
+    user_input = state.user_input.lower()
+    
+    # Simple approval case
+    if user_input in ["yes", "y", "approve", "ok"]:
+        print("\n✅ Plan approved! Let's start executing the steps.")
+        state.current_state = "plan_approved"
+        return state
+    
+    # Rejection case
+    if user_input in ["no", "n", "reject"]:
+        print("\n🔄 Let's create a new plan. Please provide more details about what you're looking for:")
+        new_details = input("> ")
+        state.problem += f" Additional context: {new_details}"
+        state.current_state = "plan_rejected"
+        return state
+    
+    # Modification case - use LLM to interpret the feedback and modify the plan
+    modification_prompt = ChatPromptTemplate.from_template(
+        """You are a DevOps assistant agent.
         
-        try:
-            with open(filename, 'r') as f:
-                serialized_history = json.load(f)
+        Original problem: {problem}
+        Current plan: {current_plan}
+        User feedback on the plan: {feedback}
+        
+        Based on the user's feedback, modify the troubleshooting plan.
+        Return a complete, numbered list of steps that incorporates the user's feedback.
+        Each step should be a specific command or action.
+        """
+    )
+    
+    modification_chain = modification_prompt | llm | StrOutputParser()
+    
+    modified_plan_text = modification_chain.invoke({
+        "problem": state.problem,
+        "current_plan": "\n".join(f"{i+1}. {step}" for i, step in enumerate(state.plan)),
+        "feedback": state.user_input
+    })
+    
+    # Parse the modified plan
+    modified_steps = []
+    for line in modified_plan_text.split("\n"):
+        line = line.strip()
+        if line and (line[0].isdigit() or line.startswith("-")):
+            # Remove numbering/bullets and clean up
+            cleaned_step = line.split(".", 1)[-1].strip() if "." in line else line[1:].strip()
+            modified_steps.append(cleaned_step)
+    
+    state.plan = modified_steps
+    
+    print("\n🔄 UPDATED PLAN")
+    for i, step in enumerate(state.plan, 1):
+        print(f"{i}. {step}")
+    
+    print("\nDo you approve this updated plan? [yes/no]")
+    approval = input("> ")
+    
+    if approval.lower() in ["yes", "y", "approve", "ok"]:
+        state.current_state = "plan_approved"
+    else:
+        state.current_state = "plan_rejected"
+    
+    return state
+
+def prepare_next_step(state: AgentState) -> AgentState:
+    """Prepare the next step for execution"""
+    
+    if state.current_step_index >= len(state.plan):
+        state.current_state = "all_steps_completed"
+        return state
+    
+    current_step = state.plan[state.current_step_index]
+    
+    print(f"\n⏭️ NEXT STEP ({state.current_step_index + 1}/{len(state.plan)})")
+    print(f"Command: {current_step}")
+    print("\nDo you want to execute this command? [yes/no/modify]")
+    
+    user_input = input("> ")
+    state.user_input = user_input
+    state.current_state = "step_decision_received"
+    
+    return state
+
+def process_step_decision(state: AgentState) -> AgentState:
+    """Process the user's decision about the next step"""
+    
+    user_input = state.user_input.lower()
+    
+    if user_input in ["yes", "y", "execute", "run"]:
+        state.current_state = "execute_step"
+        return state
+    
+    if user_input in ["no", "n", "skip"]:
+        print(f"\n⏩ Skipping step {state.current_step_index + 1}")
+        state.current_step_index += 1
+        state.current_state = "prepare_next_step"
+        return state
+    
+    if user_input.startswith("modify"):
+        print("\nPlease enter the modified command:")
+        modified_command = input("> ")
+        state.plan[state.current_step_index] = modified_command
+        print(f"\n✏️ Command modified to: {modified_command}")
+        state.current_state = "execute_step"
+        return state
+    
+    # Default fallback
+    print("\n❓ I didn't understand that response. Please answer yes, no, or modify.")
+    state.current_state = "prepare_next_step"
+    return state
+
+def execute_step(state: AgentState) -> AgentState:
+    """Execute the current step of the plan"""
+    
+    current_step = state.plan[state.current_step_index]
+    
+    print(f"\n⚙️ EXECUTION (Step {state.current_step_index + 1}/{len(state.plan)})")
+    print(f"Executing: {current_step}")
+    
+    # In a real implementation, this would execute actual system commands
+    # Here we'll simulate command execution with an LLM
+    execution_prompt = ChatPromptTemplate.from_template(
+        """You are a DevOps assistant agent simulating the execution of a system command.
+        
+        Problem: {problem}
+        Command to execute: {command}
+        
+        Generate a realistic output for this command as it would appear on a Linux system.
+        The output should be relevant to the problem described.
+        """
+    )
+    
+    execution_chain = execution_prompt | llm | StrOutputParser()
+    
+    # Simulate command execution
+    print("Executing command...")
+    time.sleep(1)  # Simulate execution time
+    
+    output = execution_chain.invoke({
+        "problem": state.problem,
+        "command": current_step
+    })
+    
+    print("\nOutput:")
+    print(output)
+    
+    # Store the results
+    state.execution_results.append({
+        "step": current_step,
+        "output": output
+    })
+    
+    state.current_state = "analyze_results"
+    return state
+
+def analyze_results(state: AgentState) -> AgentState:
+    """Analyze the results of the executed step"""
+    
+    latest_result = state.execution_results[-1]
+    
+    analysis_prompt = ChatPromptTemplate.from_template(
+        """You are a DevOps assistant agent analyzing the results of a command execution.
+        
+        Problem: {problem}
+        Command executed: {command}
+        Command output: {output}
+        
+        Analyze the output and provide insights. What does this tell us about the problem?
+        Is there evidence of the root cause? What have we learned from this step?
+        
+        Provide a concise analysis in 2-3 sentences.
+        """
+    )
+    
+    analysis_chain = analysis_prompt | llm | StrOutputParser()
+    
+    analysis = analysis_chain.invoke({
+        "problem": state.problem,
+        "command": latest_result["step"],
+        "output": latest_result["output"]
+    })
+    
+    print("\n📊 ANALYSIS")
+    print(analysis)
+    
+    state.analysis.append(analysis)
+    
+    # Generate suggested next actions based on this result
+    suggestion_prompt = ChatPromptTemplate.from_template(
+        """You are a DevOps assistant agent suggesting next actions based on command results.
+        
+        Problem: {problem}
+        Command executed: {command}
+        Command output: {output}
+        Analysis: {analysis}
+        Remaining steps in plan: {remaining_steps}
+        
+        Based on this result, suggest 1-3 possible next actions. These could be:
+        1. Continue with the next step in the plan
+        2. A specific remediation action based on what you've found
+        3. A different diagnostic command that would be more helpful now
+        
+        Format your response as a numbered list of specific actions.
+        """
+    )
+    
+    remaining_steps = state.plan[state.current_step_index + 1:] if state.current_step_index < len(state.plan) - 1 else []
+    
+    suggestion_chain = suggestion_prompt | llm | StrOutputParser()
+    
+    suggestions = suggestion_chain.invoke({
+        "problem": state.problem,
+        "command": latest_result["step"],
+        "output": latest_result["output"],
+        "analysis": analysis,
+        "remaining_steps": "\n".join(remaining_steps)
+    })
+    
+    print("\n🔄 SUGGESTED ACTIONS")
+    print(suggestions)
+    
+    # Ask for user direction
+    print("\nWhat would you like to do next?")
+    print("- Type 'next' to continue with the next step in the plan")
+    print("- Type 'remediate X' to take a specific remediation action")
+    print("- Type a custom command to execute instead")
+    print("- Type 'end' to finish troubleshooting")
+    
+    user_input = input("> ")
+    state.user_input = user_input
+    state.current_state = "post_execution_decision"
+    
+    return state
+
+def process_post_execution_decision(state: AgentState) -> AgentState:
+    """Process the user's decision after executing a step"""
+    
+    user_input = state.user_input.lower()
+    
+    if user_input in ["next", "continue"]:
+        state.current_step_index += 1
+        if state.current_step_index < len(state.plan):
+            state.current_state = "prepare_next_step"
+        else:
+            state.current_state = "all_steps_completed"
+        return state
+    
+    if user_input == "end":
+        state.current_state = "end_session"
+        return state
+    
+    if user_input.startswith("remediate"):
+        # Extract the remediation action
+        remediation = user_input[len("remediate"):].strip()
+        
+        print(f"\n🔧 REMEDIATION: {remediation}")
+        print("Simulating remediation action...")
+        time.sleep(1)  # Simulate action
+        
+        # Simulate the remediation result
+        remediation_prompt = ChatPromptTemplate.from_template(
+            """You are a DevOps assistant agent simulating a remediation action.
             
-            self.conversation_history = []
-            for msg in serialized_history:
-                if msg["type"] == "human":
-                    self.conversation_history.append(HumanMessage(content=msg["content"]))
-                elif msg["type"] == "ai":
-                    self.conversation_history.append(AIMessage(content=msg["content"]))
-                elif msg["type"] == "system":
-                    self.conversation_history.append(SystemMessage(content=msg["content"]))
+            Problem: {problem}
+            Remediation action: {action}
             
-            print(f"{self.colors['green']}Conversation loaded from {filename}{self.colors['reset']}")
-            
-            # Print a summary
-            human_msgs = sum(1 for msg in self.conversation_history if isinstance(msg, HumanMessage))
-            ai_msgs = sum(1 for msg in self.conversation_history if isinstance(msg, AIMessage))
-            print(f"{self.colors['green']}Loaded {human_msgs} user messages and {ai_msgs} agent responses{self.colors['reset']}")
-            
-        except FileNotFoundError:
-            print(f"{self.colors['red']}File not found: {filename}{self.colors['reset']}")
-        except json.JSONDecodeError:
-            print(f"{self.colors['red']}Invalid JSON in file: {filename}{self.colors['reset']}")
+            Generate a realistic output for this remediation action as it would appear on a Linux system.
+            """
+        )
+        
+        remediation_chain = remediation_prompt | llm | StrOutputParser()
+        
+        result = remediation_chain.invoke({
+            "problem": state.problem,
+            "action": remediation
+        })
+        
+        print("\nResult:")
+        print(result)
+        
+        # Ask what to do next
+        print("\nWhat would you like to do next?")
+        print("- Type 'next' to continue with the next step in the plan")
+        print("- Type a custom command to execute")
+        print("- Type 'end' to finish troubleshooting")
+        
+        next_step = input("> ")
+        state.user_input = next_step
+        # Stay in the same state to process the new input
+        return state
     
-    def print_history(self):
-        """Print the conversation history."""
-        if not self.conversation_history:
-            print(f"{self.colors['yellow']}No conversation history yet.{self.colors['reset']}")
-            return
-        
-        print(f"\n{self.colors['bold']}{self.colors['cyan']}Conversation History:{self.colors['reset']}")
-        for i, msg in enumerate(self.conversation_history):
-            if isinstance(msg, SystemMessage):
-                continue  # Skip system messages
-            elif isinstance(msg, HumanMessage):
-                print(f"{self.colors['green']}User ({i}):{self.colors['reset']} {msg.content[:100]}...")
-            elif isinstance(msg, AIMessage):
-                print(f"{self.colors['blue']}Agent ({i}):{self.colors['reset']} {msg.content[:100]}...")
-        print()
+    # If the input is a custom command, execute it
+    print(f"\n🔧 CUSTOM COMMAND: {user_input}")
+    print("Executing custom command...")
     
-    def clear_history(self):
-        """Clear the conversation history."""
-        self.conversation_history = []
-        print(f"{self.colors['green']}Conversation history cleared.{self.colors['reset']}")
+    execution_prompt = ChatPromptTemplate.from_template(
+        """You are a DevOps assistant agent simulating the execution of a system command.
+        
+        Problem: {problem}
+        Command to execute: {command}
+        
+        Generate a realistic output for this command as it would appear on a Linux system.
+        """
+    )
     
-    def process_command(self, command: str) -> bool:
-        """Process CLI commands."""
-        cmd = command.strip().lower()
-        
-        if cmd == "/help":
-            self.print_help()
-            return True
-        elif cmd == "/exit":
-            print(f"{self.colors['green']}Goodbye!{self.colors['reset']}")
-            return False
-        elif cmd == "/clear":
-            self.clear_history()
-            return True
-        elif cmd.startswith("/save"):
-            parts = command.split(maxsplit=1)
-            filename = parts[1] if len(parts) > 1 else "conversation.json"
-            self.save_conversation(filename)
-            return True
-        elif cmd.startswith("/load"):
-            parts = command.split(maxsplit=1)
-            filename = parts[1] if len(parts) > 1 else "conversation.json"
-            self.load_conversation(filename)
-            return True
-        elif cmd == "/history":
-            self.print_history()
-            return True
-        elif cmd == "/tools":
-            self.print_tools()
-            return True
-        
-        return True  # Continue running
+    execution_chain = execution_prompt | llm | StrOutputParser()
     
-    def format_agent_response(self, response: str) -> str:
-        """Format the agent's response for terminal display."""
-        # Basic formatting
-        formatted = response.replace('\n\n', '\n')
-        
-        # Highlight tool usages
-        formatted = formatted.replace("I used the ", f"{self.colors['cyan']}I used the ")
-        formatted = formatted.replace(" tool with input ", f" tool{self.colors['reset']} with input ")
-        
-        # Highlight reflection sections
-        if "Reflection:" in formatted:
-            formatted = formatted.replace("Reflection:", f"{self.colors['magenta']}Reflection:{self.colors['reset']}")
-        
-        # Highlight diagnostics and solutions
-        highlight_phrases = [
-            "The issue is", "The problem is", "This indicates", "I recommend", 
-            "You should", "Steps to fix", "Solution:", "Diagnosis:"
-        ]
-        for phrase in highlight_phrases:
-            if phrase in formatted:
-                formatted = formatted.replace(phrase, f"{self.colors['yellow']}{phrase}{self.colors['reset']}")
-        
-        return formatted
+    output = execution_chain.invoke({
+        "problem": state.problem,
+        "command": user_input
+    })
     
-    def run(self):
-        """Run the CLI interaction loop."""
-        self.print_header()
+    print("\nOutput:")
+    print(output)
+    
+    # Store the results
+    state.execution_results.append({
+        "step": user_input,
+        "output": output
+    })
+    
+    # Analyze this custom command
+    state.current_state = "analyze_results"
+    return state
+
+def summarize_session(state: AgentState) -> AgentState:
+    """Summarize the troubleshooting session"""
+    
+    if not state.execution_results:
+        print("\n❗ No commands were executed during this session.")
+        state.current_state = "end_session"
+        return state
+    
+    summary_prompt = ChatPromptTemplate.from_template(
+        """You are a DevOps assistant agent summarizing a troubleshooting session.
         
-        try:
-            while True:
-                # Get user input
-                user_input = input(f"{self.colors['green']}User:{self.colors['reset']} ")
-                
-                # Process commands
-                if user_input.startswith("/"):
-                    should_continue = self.process_command(user_input)
-                    if not should_continue:
-                        break
-                    continue
-                
-                print(f"{self.colors['blue']}Agent:{self.colors['reset']} Thinking...")
-                
-                # Run the agent
-                try:
-                    messages = self.agent(user_input, self.conversation_history)
-                    
-                    # Find the last AI message
-                    ai_messages = [msg for msg in messages if isinstance(msg, AIMessage)]
-                    if ai_messages:
-                        last_response = ai_messages[-1].content
-                        formatted_response = self.format_agent_response(last_response)
-                        print(f"{self.colors['blue']}Agent:{self.colors['reset']} {formatted_response}")
-                    
-                    # Update conversation history
-                    self.conversation_history = [msg for msg in messages 
-                                               if not isinstance(msg, SystemMessage)]
-                    
-                except Exception as e:
-                    print(f"{self.colors['red']}Error: {str(e)}{self.colors['reset']}")
-                
-        except KeyboardInterrupt:
-            print(f"\n{self.colors['green']}Exiting...{self.colors['reset']}")
+        Original problem: {problem}
+        Commands executed and their outputs: {executed_commands}
+        Analysis provided: {analysis}
         
-        print(f"{self.colors['green']}Thank you for using DevOps Troubleshooter!{self.colors['reset']}")
+        Provide a concise summary of:
+        1. What we discovered about the problem
+        2. What actions were taken
+        3. What the current status is
+        4. What further steps might be needed
+        
+        Format your response as a structured summary with clear sections.
+        """
+    )
+    
+    executed_commands = "\n\n".join([
+        f"Command: {result['step']}\nOutput: {result['output']}" 
+        for result in state.execution_results
+    ])
+    
+    analysis_text = "\n".join(state.analysis)
+    
+    summary_chain = summary_prompt | llm | StrOutputParser()
+    
+    summary = summary_chain.invoke({
+        "problem": state.problem,
+        "executed_commands": executed_commands,
+        "analysis": analysis_text
+    })
+    
+    print("\n📋 SESSION SUMMARY")
+    print(summary)
+    
+    state.current_state = "end_session"
+    return state
+
+def determine_next(state: AgentState) -> str:
+    """Determine the next node in the workflow based on the current state"""
+    
+    current_state = state.current_state
+    
+    if current_state == "initial":
+        return "create_plan"
+    
+    elif current_state == "plan_created":
+        return "present_plan"
+    
+    elif current_state == "plan_feedback_received":
+        return "process_plan_feedback"
+    
+    elif current_state == "plan_approved":
+        return "prepare_next_step"
+    
+    elif current_state == "plan_rejected":
+        return "create_plan"
+    
+    elif current_state == "step_decision_received":
+        return "process_step_decision"
+    
+    elif current_state == "execute_step":
+        return "execute_step"
+    
+    elif current_state == "analyze_results":
+        return "analyze_results"
+    
+    elif current_state == "post_execution_decision":
+        return "process_post_execution_decision"
+    
+    elif current_state == "all_steps_completed":
+        return "summarize_session"
+    
+    elif current_state == "end_session":
+        return END
+    
+    # Fallback to prevent hanging
+    return END
+
+# Create and run the graph
+def create_agent_graph():
+    # Define the graph
+    workflow = StateGraph(AgentState)
+    
+    # Add nodes
+    workflow.add_node("create_plan", create_plan)
+    workflow.add_node("present_plan", present_plan)
+    workflow.add_node("process_plan_feedback", process_plan_feedback)
+    workflow.add_node("prepare_next_step", prepare_next_step)
+    workflow.add_node("process_step_decision", process_step_decision)
+    workflow.add_node("execute_step", execute_step)
+    workflow.add_node("analyze_results", analyze_results)
+    workflow.add_node("process_post_execution_decision", process_post_execution_decision)
+    workflow.add_node("summarize_session", summarize_session)
+    
+    # Add conditional edges using the determine_next function
+    workflow.add_conditional_edges(
+        "create_plan",
+        determine_next,
+    )
+    workflow.add_conditional_edges(
+        "present_plan",
+        determine_next,
+    )
+    workflow.add_conditional_edges(
+        "process_plan_feedback",
+        determine_next,
+    )
+    workflow.add_conditional_edges(
+        "prepare_next_step",
+        determine_next,
+    )
+    workflow.add_conditional_edges(
+        "process_step_decision",
+        determine_next,
+    )
+    workflow.add_conditional_edges(
+        "execute_step",
+        determine_next,
+    )
+    workflow.add_conditional_edges(
+        "analyze_results",
+        determine_next,
+    )
+    workflow.add_conditional_edges(
+        "process_post_execution_decision",
+        determine_next,
+    )
+    workflow.add_conditional_edges(
+        "summarize_session",
+        determine_next,
+    )
+    
+    # Set the entry point
+    workflow.set_entry_point("create_plan")
+    
+    # Compile the graph
+    return workflow.compile()
 
 def main():
-    """Main entry point for the CLI."""
-    parser = argparse.ArgumentParser(description="DevOps Troubleshooter Agent CLI")
-    parser.add_argument("--api-key", type=str, help="OpenAI API key")
-    args = parser.parse_args()
+    # Create the agent graph
+    agent = create_agent_graph()
     
-    # Create and run the CLI
-    cli = DevOpsAgentCLI(api_key=args.api_key)
-    cli.run()
+    # Run the agent
+    print("🤖 DevOps Assistant Agent")
+    print("------------------------")
+    print("What problem are you experiencing?")
+    problem = input("> ")
+    
+    # Create initial state
+    state = AgentState(problem=problem)
+
+    # Run the graph
+    agent.invoke(state)
+    
+    print("\n✅ Troubleshooting session complete.")
 
 if __name__ == "__main__":
     main()

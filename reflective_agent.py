@@ -8,6 +8,9 @@ from langchain_community.chat_models import ChatLiteLLM
 from langgraph.graph import StateGraph, END
 from dotenv import load_dotenv
 
+# Load environment variables
+load_dotenv()
+
 # Define the agent state
 class AgentState(TypedDict):
     messages: list
@@ -17,6 +20,7 @@ class AgentState(TypedDict):
     problem_understanding: str
     status: Literal["planning", "executing", "reflecting", "finished", "awaiting_approval"]
     proposed_tool: str  # Store the proposed tool while waiting for approval
+    user_input: str # Store user input
 
 # DevOps Troubleshooting Tools
 # [Same tool definitions as before]
@@ -109,9 +113,11 @@ def validate_configuration(config_path: str) -> str:
 # Create the agent
 def create_agent():
     # Initialize LLM
-
-    llm = ChatOpenAI(model="gpt-4")
-    
+    llm = ChatLiteLLM(
+        model_name="gpt-4o",
+        api_base=os.getenv("API_BASE"),
+        api_key=os.getenv("API_KEY")
+    )
     # Define prompts
     # [Same planning_prompt and other prompts as before]
     planning_prompt = ChatPromptTemplate.from_messages([
@@ -192,18 +198,36 @@ def create_agent():
     ])
     
     # Define state transitions
-    def understand_problem(state):
-        messages = state["messages"]
-        last_message = messages[-1]
-        if isinstance(last_message, HumanMessage):
-            return {"messages": messages, 
-                    "status": "planning", 
-                    "current_plan": "", 
-                    "reflection": "",
-                    "tool_history": [],
-                    "problem_understanding": last_message.content,
-                    "proposed_tool": ""}
+
+def initialize_state(state):
+    messages = state.get("messages", [])
+    if not messages:
         return state
+    last_message = messages[-1]
+    if isinstance(last_message, HumanMessage) and state.get("status") != "awaiting_approval":
+        return {
+            "messages": messages,
+            "status": "planning",
+            "current_plan": "",
+            "reflection": "",
+            "tool_history": [],
+            "problem_understanding": last_message.content,
+            "proposed_tool": "",
+            "user_input": ""
+        }
+    return state
+    # def understand_problem(state):
+    #     messages = state["messages"]
+    #     last_message = messages[-1]
+    #     if isinstance(last_message, HumanMessage):
+    #         return {"messages": messages, 
+    #                 "status": "planning", 
+    #                 "current_plan": "", 
+    #                 "reflection": "",
+    #                 "tool_history": [],
+    #                 "problem_understanding": last_message.content,
+    #                 "proposed_tool": ""}
+    #     return state
     
     def create_plan(state):
         messages = state["messages"]
@@ -212,13 +236,16 @@ def create_agent():
         
         # Update state with the plan
         updated_messages = messages + [response]
-        return {"messages": updated_messages, 
-                "status": "executing", 
-                "current_plan": response.content,
-                "problem_understanding": state["problem_understanding"],
-                "reflection": state["reflection"],
-                "tool_history": state["tool_history"],
-                "proposed_tool": ""}
+        return {
+            "messages": updated_messages,
+            "status": "executing",
+            "current_plan": response.content,
+            "problem_understanding": state["problem_understanding"],
+            "reflection": state["reflection"],
+            "tool_history": state["tool_history"],
+            "proposed_tool": "",
+            "user_input": state["user_input"]
+        }
     
     def propose_tool(state):
         execution_chain = execution_prompt | llm
@@ -245,7 +272,8 @@ def create_agent():
                 "problem_understanding": state["problem_understanding"],
                 "reflection": state["reflection"],
                 "tool_history": state["tool_history"],
-                "proposed_tool": tool_call
+                "proposed_tool": tool_call,
+                "user_input": state["user_input"]
             }
         else:
             # No tool was proposed, move to reflection
@@ -256,73 +284,76 @@ def create_agent():
                 "problem_understanding": state["problem_understanding"],
                 "reflection": state["reflection"],
                 "tool_history": state["tool_history"],
-                "proposed_tool": ""
+                "proposed_tool": "",
+                "user_input": state["user_input"]
             }
     
-    def process_approval(state):
-        messages = state["messages"]
-        last_message = messages[-1]
-        
-        if not isinstance(last_message, HumanMessage):
-            # This shouldn't happen in normal operation
-            return state
-        
-        tool_call = state["proposed_tool"]
-        
-        # Check if the user approved the tool execution
-        if "approve" in last_message.content.lower() or "yes" in last_message.content.lower():
-            # Execute the approved tool
-            tool_name = tool_call.split("(")[0].strip()
-            try:
-                if tool_name == "check_system_resources":
-                    result = check_system_resources()
-                elif tool_name == "analyze_logs":
-                    service = tool_call.split("(")[1].split(")")[0].replace('"', '').replace("'", "")
-                    result = analyze_logs(service)
-                elif tool_name == "check_network_connectivity":
-                    params = tool_call.split("(")[1].split(")")[0]
-                    source, destination = [p.strip().replace('"', '').replace("'", "") for p in params.split(",")]
-                    result = check_network_connectivity(source, destination)
-                elif tool_name == "check_container_status":
-                    container = tool_call.split("(")[1].split(")")[0].replace('"', '').replace("'", "")
-                    result = check_container_status(container)
-                elif tool_name == "check_service_status":
-                    service = tool_call.split("(")[1].split(")")[0].replace('"', '').replace("'", "")
-                    result = check_service_status(service)
-                elif tool_name == "validate_configuration":
-                    config_path = tool_call.split("(")[1].split(")")[0].replace('"', '').replace("'", "")
-                    result = validate_configuration(config_path)
-                else:
-                    result = f"Unknown tool: {tool_name}"
-                    
-                tool_history = state["tool_history"] + [f"Tool: {tool_call}\nResult: {result}"]
-                updated_messages = messages + [HumanMessage(content=f"Tool result: {result}")]
+    def process_user_input(state):
+            # This function processes any user input
+            messages = state["messages"]
+            user_input = state["user_input"]
+            
+            if state["status"] == "awaiting_approval":
+                tool_call = state["proposed_tool"]
                 
-                # Continue executing if tool count is below threshold, otherwise reflect
-                if len(tool_history) < 5:
-                    next_status = "executing"
+                # Check if the user approved the tool execution
+                if "approve" in user_input.lower() or "yes" in user_input.lower():
+                    # Execute the approved tool
+                    tool_name = tool_call.split("(")[0].strip()
+                    try:
+                        if tool_name == "check_system_resources":
+                            result = check_system_resources()
+                        elif tool_name == "analyze_logs":
+                            service = tool_call.split("(")[1].split(")")[0].replace('"', '').replace("'", "")
+                            result = analyze_logs(service)
+                        elif tool_name == "check_network_connectivity":
+                            params = tool_call.split("(")[1].split(")")[0]
+                            source, destination = [p.strip().replace('"', '').replace("'", "") for p in params.split(",")]
+                            result = check_network_connectivity(source, destination)
+                        elif tool_name == "check_container_status":
+                            container = tool_call.split("(")[1].split(")")[0].replace('"', '').replace("'", "")
+                            result = check_container_status(container)
+                        elif tool_name == "check_service_status":
+                            service = tool_call.split("(")[1].split(")")[0].replace('"', '').replace("'", "")
+                            result = check_service_status(service)
+                        elif tool_name == "validate_configuration":
+                            config_path = tool_call.split("(")[1].split(")")[0].replace('"', '').replace("'", "")
+                            result = validate_configuration(config_path)
+                        else:
+                            result = f"Unknown tool: {tool_name}"
+                            
+                        tool_history = state["tool_history"] + [f"Tool: {tool_call}\nResult: {result}"]
+                        updated_messages = messages + [HumanMessage(content=f"Tool result: {result}")]
+                        
+                        # Continue executing if tool count is below threshold, otherwise reflect
+                        if len(tool_history) < 5:
+                            next_status = "executing"
+                        else:
+                            next_status = "reflecting"
+                            
+                    except Exception as e:
+                        tool_history = state["tool_history"] + [f"Tool: {tool_call}\nError: {str(e)}"]
+                        updated_messages = messages + [HumanMessage(content=f"Error executing tool: {str(e)}")]
+                        next_status = "reflecting"  # On error, move to reflection
                 else:
-                    next_status = "reflecting"
-                    
-            except Exception as e:
-                tool_history = state["tool_history"] + [f"Tool: {tool_call}\nError: {str(e)}"]
-                updated_messages = messages + [HumanMessage(content=f"Error executing tool: {str(e)}")]
-                next_status = "reflecting"  # On error, move to reflection
-        else:
-            # User denied the tool execution
-            tool_history = state["tool_history"] + [f"Tool: {tool_call}\nStatus: Execution denied by user"]
-            updated_messages = messages + [HumanMessage(content=f"Tool execution denied: {tool_call}")]
-            next_status = "executing"  # Continue with execution to propose a different tool
-        
-        return {
-            "messages": updated_messages,
-            "status": next_status,
-            "current_plan": state["current_plan"],
-            "problem_understanding": state["problem_understanding"],
-            "reflection": state["reflection"],
-            "tool_history": tool_history,
-            "proposed_tool": ""
-        }
+                    # User denied the tool execution
+                    tool_history = state["tool_history"] + [f"Tool: {tool_call}\nStatus: Execution denied by user"]
+                    updated_messages = messages + [HumanMessage(content=f"Tool execution denied: {tool_call}")]
+                    next_status = "executing"  # Continue with execution to propose a different tool
+                
+                return {
+                    "messages": updated_messages,
+                    "status": next_status, 
+                    "current_plan": state["current_plan"],
+                    "problem_understanding": state["problem_understanding"],
+                    "reflection": state["reflection"],
+                    "tool_history": tool_history,
+                    "proposed_tool": "",
+                    "user_input": ""
+                }
+            
+            # If we're not awaiting approval, proceed with normal flow
+            return state
     
     def reflect(state):
         reflection_chain = reflection_prompt | llm
@@ -346,7 +377,8 @@ def create_agent():
             "problem_understanding": state["problem_understanding"],
             "reflection": response.content,
             "tool_history": state["tool_history"],
-            "proposed_tool": ""
+            "proposed_tool": "",
+            "user_input": state["user_input"]
         }
     
     def finish(state):
@@ -368,41 +400,35 @@ def create_agent():
             "problem_understanding": state["problem_understanding"],
             "reflection": state["reflection"],
             "tool_history": state["tool_history"],
-            "proposed_tool": ""
+            "proposed_tool": "",
+            "user_input": state["user_input"]
         }
     
     # Set up the workflow graph
     workflow = StateGraph(AgentState)
     
     # Add nodes
-    workflow.add_node("understand_problem", understand_problem)
+    workflow.add_node("initialize_state", initialize_state)
     workflow.add_node("create_plan", create_plan)
     workflow.add_node("propose_tool", propose_tool)
-    workflow.add_node("process_approval", process_approval)
+    workflow.add_node("process_user_input", process_user_input)
     workflow.add_node("reflect", reflect)
     workflow.add_node("finish", finish)
     
     # Add edges
-    workflow.set_entry_point("understand_problem")
-    workflow.add_edge("understand_problem", "create_plan")
+    workflow.set_entry_point("initialize_state")
+    workflow.add_edge("initialize_state", "create_plan")
     workflow.add_edge("create_plan", "propose_tool")
+    workflow.add_edge("propose_tool", "process_user_input")
     
-    # Conditional edges based on status
+    # Define conditional edges
     workflow.add_conditional_edges(
-        "propose_tool",
-        lambda state: state["status"],
-        {
-            "awaiting_approval": "process_approval",
-            "reflecting": "reflect",
-        }
-    )
-    
-    workflow.add_conditional_edges(
-        "process_approval",
+        "process_user_input",
         lambda state: state["status"],
         {
             "executing": "propose_tool",
             "reflecting": "reflect",
+            "awaiting_approval": "process_user_input",  # Stay in this state if we need more input
         }
     )
     
@@ -420,49 +446,79 @@ def create_agent():
     # Compile the graph
     return workflow.compile()
 
-# Interactive function to run the agent
-def run_interactive_agent():
-    agent = create_agent()
+# Interface for the agent
+class DevOpsTroubleshooter:
+    def __init__(self):
+        self.agent = create_agent()
+        self.state = None
     
-    # Get user's initial problem description
-    problem = input("Please describe the DevOps issue you're experiencing: ")
+    def start(self, problem_description):
+        """Start a new troubleshooting session"""
+        self.state = self.agent.invoke({
+            "messages": [HumanMessage(content=problem_description)],
+            "status": "planning", 
+            "current_plan": "", 
+            "reflection": "",
+            "tool_history": [],
+            "problem_understanding": "",
+            "proposed_tool": "",
+            "user_input": ""
+        })
+        return self._get_latest_ai_message()
     
-    # Initialize the state
-    current_state = agent.invoke({
-        "messages": [HumanMessage(content=problem)]
-    })
-    
-    # Loop to handle interactions
-    while current_state["status"] != "finished":
-        # Display relevant messages
-        for message in current_state["messages"][-2:]:  # Show only the latest exchange
+    def _get_latest_ai_message(self):
+        """Get the most recent AI message"""
+        for message in reversed(self.state["messages"]):
             if isinstance(message, AIMessage):
-                print(f"\nAgent: {message.content}\n")
-            elif isinstance(message, HumanMessage):
-                print(f"\nYou: {message.content}\n")
+                return message.content
+        return None
+    
+    def _get_status_message(self):
+        """Get a status message based on current state"""
+        if self.state["status"] == "awaiting_approval":
+            return f"\n=== APPROVAL REQUIRED ===\nTool to execute: {self.state['proposed_tool']}\nDo you approve this command? (yes/no): "
+        elif self.state["status"] == "finished":
+            return "\n=== TROUBLESHOOTING COMPLETED ==="
+        return ""
+    
+    def step(self, user_input=None):
+        """Take one step in the agent's execution"""
+        if self.state["status"] == "finished":
+            return self._get_latest_ai_message()
         
-        # If waiting for approval
-        if current_state["status"] == "awaiting_approval":
-            tool = current_state["proposed_tool"]
-            print(f"\n=== APPROVAL REQUIRED ===")
-            print(f"Tool to execute: {tool}")
-            approval = input("Do you approve this command? (yes/no): ")
-            
-            # Continue with user's response
-            current_state = agent.invoke({
-                **current_state,
-                "messages": current_state["messages"] + [HumanMessage(content=approval)]
+        if user_input is not None:
+            self.state = self.agent.invoke({
+                **self.state,
+                "user_input": user_input
             })
         else:
-            # For other states, just continue the execution
-            current_state = agent.invoke(current_state)
+            self.state = self.agent.invoke(self.state)
+            
+        return self._get_latest_ai_message() + self._get_status_message()
+
+# Run interactive session
+def run_interactive_agent():
+    troubleshooter = DevOpsTroubleshooter()
     
-    # Display the final output
-    for message in current_state["messages"][-2:]:
-        if isinstance(message, AIMessage):
-            print(f"\nAgent: {message.content}\n")
-        elif isinstance(message, HumanMessage):
-            print(f"\nYou: {message.content}\n")
+    # Get initial problem
+    print("DevOpsTroubleshooter CLI")
+    print("------------------------")
+    problem = input("Please describe the DevOps issue you're experiencing: ")
+    
+    # Start troubleshooting
+    response = troubleshooter.start(problem)
+    print(f"\nAgent: {response}")
+    
+    # Main interaction loop
+    while troubleshooter.state["status"] != "finished":
+        if troubleshooter.state["status"] == "awaiting_approval":
+            user_input = input("")  # The prompt is already shown in the status message
+        else:
+            # Just continue execution without additional input
+            user_input = None
+            
+        response = troubleshooter.step(user_input)
+        print(f"\nAgent: {response}")
 
 # Example usage
 if __name__ == "__main__":
