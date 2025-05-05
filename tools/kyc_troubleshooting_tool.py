@@ -65,7 +65,7 @@ def troubleshoot_kyc(run_commands: bool = False):
         with open('/etc/hosts', 'r') as f:
             hosts_content = f.read()
             
-        if re.search(r'\b10\.14\.20\.218\s+k8s-lb-local\.deriv\.local\b', hosts_content):
+        if re.search(r'oooooooo', hosts_content):
             results.append("✅ k8s-lb-local.deriv.local found in /etc/hosts")
         else:
             results.append("❌ k8s-lb-local.deriv.local entry NOT found in /etc/hosts")
