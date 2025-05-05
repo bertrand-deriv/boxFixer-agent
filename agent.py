@@ -8,20 +8,21 @@ from langchain_openai import ChatOpenAI
 from langchain_community.chat_models import ChatLiteLLM
 from langchain_core.tools import tool
 from langchain_core.messages import SystemMessage
-from log_monitor_tool import check_logs_once
-from service_health_check_tool import check_services
-from command_executor_tool import execute_shell_command
-from resource_monitoring_tool import check_system_resources
+from tools.log_monitor_tool import check_logs_once
+from tools.service_health_check_tool import check_services
+from tools.command_executor_tool import execute_shell_command
+from tools.resource_monitoring_tool import check_system_resources
+from tools.kyc_troubleshooting_tool import troubleshoot_kyc
 from dotenv import load_dotenv
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.prebuilt import create_react_agent
 
-from kyc_troubleshooting_tool import troubleshoot_kyc
 
 from pydantic import BaseModel, Field
 from langchain.output_parsers import PydanticOutputParser
 from langchain_core.prompts import PromptTemplate
 from langchain.prompts import ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate
+
 # Define structured output models
 # class LogEntry(BaseModel):
 #     message: str = Field(description="The log message content")
@@ -56,6 +57,7 @@ class MonitoringReport(BaseModel):
 # Initialize the parser
 output_parser = PydanticOutputParser(pydantic_object=MonitoringReport)
 
+
 # Load environment variables
 load_dotenv()
 
@@ -72,8 +74,7 @@ def fetch_service_status():
     """Checks service health using the service checker tool."""
     return check_services()
 
-instructions = output_parser.get_format_instructions()
-escaped_instructions = instructions.replace("{", "{{").replace("}", "}}")
+
 
 system_message = SystemMessagePromptTemplate.from_template(
     f"""
@@ -99,10 +100,6 @@ system_message = SystemMessagePromptTemplate.from_template(
         - check_system_resources: Use this tool to check system resource usage. If there's any red flags, report them. It is advisable to rebuild
                                   QAbox when CPU and/or memory is at bottleneck.
         - troubleshoot_kyc: Use this to troubleshoot the kyc service
-
-        CRITICAL: At the end of your analysis, you MUST provide a standardized report in JSON format exactly as specified here:
-        {escaped_instructions}
-        Do not include any text before or after the JSON structure. The JSON should be the only content in your final response.
 
         Constraints:
         - Never attempt to execute potentially dangerous commands
@@ -236,10 +233,18 @@ def run_agent(interactive: bool = True):
     """
     typer.echo("\n🤖 AI Agent starting up...")
     typer.echo("📊 Initializing systems...")
+
+    instructions = output_parser.get_format_instructions()
+    escaped_instructions = instructions.replace("{", "{{").replace("}", "}}")
     
     # First automated query to check logs and service status
-    initial_query = "As DevOps assistant agent, give the report of the service health check and advise when QAbox is in ready status to start testing"
-    typer.echo(f"\n🔍 Running initial check: '{initial_query}'")
+    initial_query = f"""
+    As DevOps assistant agent, give the report of the service health check and advise when QAbox is in ready status to start testing
+    CRITICAL: At the end of your analysis, you MUST provide a standardized report in JSON format exactly as specified here:
+        {escaped_instructions}
+    Do not include any text before or after the JSON structure. The JSON should be the only content in your final response.
+    """
+    typer.echo(f"\n🔍 Running initial check.....")
     
     try:
         # Run the first query automatically
@@ -284,12 +289,8 @@ def run_agent(interactive: bool = True):
                     display_structured_output(structured_output)
                 except Exception as e:
                     # Fall back to normal display if parsing fails
-                    typer.echo("\n🤖 Agent response (raw format):")
+                    typer.echo("\n🤖 Agent response:")
                     display_typing_effect(agent_response)
-                
-                typer.echo("\n🤖 Agent response:")
-                display_typing_effect(agent_response)
-                
             except Exception as e:
                 typer.echo(f"\n❌ Error processing query: {str(e)}")
                 

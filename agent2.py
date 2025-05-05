@@ -39,7 +39,8 @@ def create_plan(state: AgentState) -> AgentState:
     """Generate a troubleshooting plan based on the problem description"""
     
     plan_prompt = ChatPromptTemplate.from_template(
-        """You are a DevOps assistant agent trying to troubleshoot a server issue.
+        """
+        You are a DevOps assistant agent trying to troubleshoot a server issue.
         
         Problem: {problem}
         
