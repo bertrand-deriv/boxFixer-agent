@@ -4,14 +4,11 @@ import json
 import subprocess
 import re
 from pathlib import Path
-from langchain_core.tools import tool
+import sys
 
-@tool
-def troubleshoot_kyc(run_commands: bool = False): 
+def troubleshoot_kyc(run_commands: bool = False):
     """Troubleshoot KYC service issues by checking configuration, services, and infrastructure."""
     results = []
-    
-    # Store commands that might need to be executed
     commands_to_execute = []
     
     # Step 1: Check if service-kyc tag exists in tags.json
@@ -57,7 +54,7 @@ def troubleshoot_kyc(run_commands: bool = False):
         ]
         commands_to_execute.extend(copy_commands)
         commands_to_execute.append(
-            "copy the related entry in internal-service values.yml from qa61 into your qabox"
+            "copy the related entry in internal-service values.yml from qa61 into your qabox; "
             "cd /home/git/regentmarkets/environment-manifest-qa && git add . && "
             "git commit -m 'Add missing service folders for KYC' && git push origin <current qabox>"
         )
@@ -104,11 +101,12 @@ def troubleshoot_kyc(run_commands: bool = False):
     except Exception as e:
         results.append(f"❌ Error checking pod status: {str(e)}")
     
-    # Print summary and recommended actions
-    if commands_to_execute:
-        results.append("\n🛠️ Recommended actions:")
-        for i, cmd in enumerate(commands_to_execute, 1):
-            results.append(f"{i}. Run: {cmd}")
-    else:
-        results.append("\n✅ No issues found that require immediate action")
-    return "\n".join(results)
+    # Final return — now returning a dictionary
+    return {
+        "log": "\n".join(results),
+        "commands": 
+    }
+
+# Main block to make the script self-executable
+if __name__ == "__main__":
+    print(troubleshoot_kyc())
