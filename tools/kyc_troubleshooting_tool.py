@@ -12,7 +12,7 @@ def troubleshoot_kyc(run_commands: bool = False):
     commands_to_execute = []
     
     # Step 1: Check if service-kyc tag exists in tags.json
-    results.append("🔍 Step 1: Checking if service-kyc tag exists in tags.json...")
+    results.append("🔍 Step 1: Checking if service_kyc tag exists in tags.json...")
     tags_file = "/etc/chef/chef/tags/qa.json"
     
     if os.path.exists(tags_file):
@@ -20,12 +20,12 @@ def troubleshoot_kyc(run_commands: bool = False):
             with open(tags_file, 'r') as f:
                 tags_data = json.load(f)
                 
-            if 'service-kyc' in tags_data:
-                results.append("✅ service-kyc tag found in tags.json")
+            if 'service_kyc' in tags_data:
+                results.append("✅ service_kyc tag found in tags.json")
             else:
-                results.append("❌ service-kyc tag NOT found in tags.json")
+                results.append("❌ service_kyc tag NOT found in tags.json")
                 commands_to_execute.append(
-                    "Add service-kyc tag to tags.json and run chef-client"
+                    "Add service_kyc tag to /etc/chef/chef/tags/qa.json and run chef-client"
                 )
         except Exception as e:
             results.append(f"❌ Error reading tags.json: {str(e)}")
@@ -65,7 +65,7 @@ def troubleshoot_kyc(run_commands: bool = False):
         with open('/etc/hosts', 'r') as f:
             hosts_content = f.read()
             
-        if re.search(r'oooooooo', hosts_content):
+        if re.search(r'\b10\.14\.20\.218\s+k8s-lb-local\.deriv\.local\b', hosts_content):
             results.append("✅ k8s-lb-local.deriv.local found in /etc/hosts")
         else:
             results.append("❌ k8s-lb-local.deriv.local entry NOT found in /etc/hosts")
@@ -104,7 +104,7 @@ def troubleshoot_kyc(run_commands: bool = False):
     # Final return — now returning a dictionary
     return {
         "log": "\n".join(results),
-        "commands": 
+        "commands": commands_to_execute
     }
 
 # Main block to make the script self-executable

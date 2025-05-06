@@ -3,7 +3,7 @@ import typer
 import os
 import sys
 import time
-from typing import List, Optional
+from typing import List, Optional, Dict
 from langchain_community.chat_models import ChatLiteLLM
 from langchain_core.tools import tool
 from langchain_core.messages import SystemMessage
@@ -54,10 +54,6 @@ load_dotenv()
 app = typer.Typer()
 
 # Define tools
-# @tool
-# def fetch_logs():
-#     """Fetches logs with errors and warnings from system log files."""
-#     return check_logs_once(for_agent=True, no_color=True)
 
 @tool
 def fetch_service_status():
@@ -66,7 +62,7 @@ def fetch_service_status():
 
 @tool
 def troubleshoot_kyc_tool():
-    """Checks service health using the service checker tool."""
+    """Troubleshoot KYC service ."""
     return troubleshoot_kyc()
 
 
@@ -139,7 +135,7 @@ def display_services(label: str, services: List):
 def display_structured_output(structured_output):
     """Display the structured output in a user-friendly format"""
 
-    print("\n===== MONITORING REPORT =====\n")
+    print("\n ===== 🤖 MONITORING REPORT =====\n")
 
     # Display summary
     print(f"📋 SUMMARY: {structured_output.summary}\n")
@@ -169,111 +165,46 @@ def display_typing_effect(message):
         time.sleep(0.002)
     print()
 
-def handle_troubleshooting_if_needed(structured_output: MonitoringReport, tools: List):
+def auto_troubleshoot_kyc_if_needed(structured_output, graph, config):
     """
-    Checks KYC services for issues, invokes the appropriate troubleshooting tools,
-    and returns summarized results. Leaves command execution to the agent.
+    Check for failing KYC services and automatically run troubleshooting through the agent
     """
     from rich import print
-    from rich.prompt import Confirm
-
-    TROUBLESHOOTING_TOOL_MAP = {
-        "service-kyc-rules": "troubleshoot_kyc_tool",
-        "kyc_identity_verification": "troubleshoot_kyc_tool",
-        "service-business-rule": "troubleshoot_kyc_tool"
-    }
-
-    # Step 1: Identify failing KYC services
+    # Step 1: Check if any KYC services are failing
     kyc_services = structured_output.services.kyc_services or []
     failing_services = [
         svc for svc in kyc_services 
         if not svc.running or svc.status.lower() in ["error", "not found"]
     ]
 
-
     if not failing_services:
-        print("[green]✅ All KYC services are running. No troubleshooting needed.[/green]")
+        print("\n[green]✅ All KYC services are operational. No troubleshooting needed.[/green]")
         return
 
-    # Step 2: Map to troubleshooting tools (avoid duplicate calls)
-    tools_to_run = set()
-    for svc in failing_services:
-        for keyword, tool_name in TROUBLESHOOTING_TOOL_MAP.items():
-            if keyword in svc.name:
-                tools_to_run.add(tool_name)
+    # Step 2: Format a list of failing services for the prompt
+    failing_service_names = ", ".join([svc.name for svc in failing_services])
+    print(f"\n[yellow]⚠️ Found failing KYC services: {failing_service_names}[/yellow]")
+    print("[yellow]🔧 Automatically initiating KYC troubleshooting...[/yellow]\n")
+    
+    # Step 3: Craft a troubleshooting instruction for the agent
+    troubleshoot_message = f"""
+    URGENT: KYC services are failing. The following services need immediate attention:
+    {failing_service_names}
+    
+    Use the troubleshoot_kyc_tool to diagnose and fix these services. Provide a detailed
+    report of what you find and any actions taken and a list of commands to be executed. Return the response in Human friendly way (Not JSON).
+    Finish by asking the user if you can go ahead and start executing one by one
+    """
+    
+    # Step 4: Invoke the agent with the troubleshooting message
+    print("🤖 [Agent is troubleshooting KYC services...]")
+    response = graph.invoke({"messages": troubleshoot_message}, config)
+    agent_response = response["messages"][-1].content
+    
+    # Step 5: Display the response with typing effect for natural conversation
+    print("\n🤖 [KYC Troubleshooting Results]")
+    display_typing_effect(agent_response)
 
-    if not tools_to_run:
-        print("[yellow]⚠️ KYC service issues detected, but no tools mapped.[/yellow]")
-        return
-
-
-    # Step 3: Call each tool once and display advice
-    tool_advice_map = {}
-
-    for tool_name in tools_to_run:
-        tool = next((t for t in tools if t.name == tool_name), None)
-        if not tool:
-            print(f"[red]❌ Tool '{tool_name}' not found in tools list.[/red]")
-            continue
-
-        print(f"\n🛠️ Running troubleshooting tool: [bold]{tool_name}[/bold]...\n")
-        result = tool()
-
-        if isinstance(result, dict):
-            advice = result.get("advice", "")
-            commands = result.get("commands", [])
-        else:
-            advice = str(result)
-            commands = []
-
-        tool_advice_map[tool_name] = {
-            "advice": advice,
-            "commands": commands
-        }
-
-        print(f"[cyan]📋 Advice:[/cyan]\n{advice}\n")
-
-        if commands:
-            print("[blue]💡 Suggested Commands:[/blue]")
-            for i, cmd in enumerate(commands, 1):
-                print(f"  {i}. {cmd}")
-        else:
-            print("[yellow]⚠️ No commands returned by this tool.[/yellow]")
-
-    # Step 4: Ask user if they want the agent to act
-    if Confirm.ask("\n🚀 Do you want the agent to apply the recommended troubleshooting steps?", default=False):
-        for tool_name in tool_advice_map.keys():
-            print(f"\n📣 [bold]Triggering agent to implement troubleshooting from {tool_name}...[/bold]")
-            print(f"[green]✅ Message to agent:[/green] User approved troubleshooting for {tool_name}. Start applying the recommended steps now.")
-    else:
-        print("\n⏹️ [yellow]User declined to proceed. Agent will not take action.[/yellow]")
-
-fake_monitoring_report = MonitoringReport(
-    summary="KYC services degraded.",
-    resources=ResourceStatus(cpu_usage="30%", memory_usage="40%", disk_usage="70%"),
-    recommendations=["Check KYC services"],
-    services={
-        "kyc_services": [
-            ServiceStatus(
-                name="kyc_identity_verification",
-                status="error",
-                running=False,
-                message="Connection timeout",
-                error="TimeoutError"
-            ),
-            ServiceStatus(
-                name="service-business-rule",
-                status="ok",
-                running=True,
-                message="Stable",
-                error=None
-            )
-        ],
-        "passkeys_services": [],
-        "crypto_services": [],
-        "other_services": []
-    }
-)
 @app.command()
 def run_agent(interactive: bool = True):
     """
@@ -299,23 +230,21 @@ def run_agent(interactive: bool = True):
     
     try:
         # Run the first query automatically
-        handle_troubleshooting_if_needed(fake_monitoring_report, tools)
-        # response = graph.invoke({"messages": initial_query}, config)
-        # agent_response = response["messages"][-1].content
-        # try:
-        #     # Try to parse the response into structured format
-        #     # structured_output = output_parser.parse(agent_response)
-        #     # display_structured_output(structured_output)
-        #     # handle_troubleshooting_if_needed(structured_output, tools)
-        # except Exception as e:
-        #     # Fall back to normal display if parsing fails
-        #     typer.echo("\n🤖 Agent response (raw format - parsing failed):")
-        #     typer.echo(f"\nParsing error: {str(e)}")
-        #     display_typing_effect(agent_response)
-        
-        # typer.echo("\n🤖 Agent response:")
-        # display_typing_effect(agent_response)
-        
+     
+        response = graph.invoke({"messages": initial_query}, config)
+        agent_response = response["messages"][-1].content
+        print(tools)
+        try:
+            # Try to parse the response into structured format
+            structured_output = output_parser.parse(agent_response)
+            display_structured_output(structured_output)
+            auto_troubleshoot_kyc_if_needed(structured_output, graph, config)
+
+        except Exception as e:
+            # Fall back to normal display if parsing fails
+            typer.echo("\n🤖 Agent response (raw format - parsing failed):")
+            typer.echo(f"\nParsing error: {str(e)}")
+            display_typing_effect(agent_response)        
         if not interactive:
             typer.echo("\n✅ Agent task completed.")
             return
