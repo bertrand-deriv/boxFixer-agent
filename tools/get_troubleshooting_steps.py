@@ -36,13 +36,13 @@ def get_service_troubleshooting_steps(service_name: str) -> dict:
             "steps": [
                 {
                     "name": "Check if service-kyc tag exists in tags.json",
-                    "commands": ["cat /etc/chef/chef/tags/qa.json | grep service_kyc"]
+                    "commands": ["cat /etc/chef/chef/tags/qa.json | grep 'service_kyc'"]
                 },
                 {
                     "name": "Check if required KYC service folders exist",
                     "commands": [
-                        "ls -la /home/git/regentmarkets/environment-manifests-qa/k8s/service-business-rules || echo 'service-business-rules folder NOT found'",
-                        "ls -la /home/git/regentmarkets/environment-manifests-qa/k8s/service-kyc-rules || echo 'service-kyc-rules folder NOT found'"
+                        "ls -la /home/git/regentmarkets/environment-manifests-qa/k8s/service-business-rules",
+                        "ls -la /home/git/regentmarkets/environment-manifests-qa/k8s/service-kyc-rules"
                     ]
                 },
                 {
@@ -80,7 +80,7 @@ def get_service_troubleshooting_steps(service_name: str) -> dict:
                 {
                     "name": "Check if KYC pods are running",
                     "commands": [
-                        "kubectl get pods -n <qabox number e.g qa40> | grep -E 'service-kyc|business-rules'"
+                        "kubectl get pods -n <qabox e.g qa40>"
                     ]
                 },
 

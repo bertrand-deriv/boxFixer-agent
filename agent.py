@@ -12,7 +12,7 @@ from tools.service_health_check_tool import check_services
 from tools.command_executor_tool import execute_shell_command
 from tools.resource_monitoring_tool import check_system_resources
 from tools.kyc_troubleshooting_tool import troubleshoot_kyc
-from tools.get_service_troubleshooting_steps import get_service_troubleshooting_steps
+from tools.get_troubleshooting_steps import get_service_troubleshooting_steps
 from dotenv import load_dotenv
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.prebuilt import create_react_agent
@@ -115,7 +115,7 @@ llm = ChatLiteLLM(
     api_key=os.getenv("API_KEY")
 )
 # Set up tools
-tools = [ fetch_service_status, execute_shell_command, check_system_resources, troubleshoot_kyc_tool ] # removed fetch_logs
+tools = [ fetch_service_status, execute_shell_command, check_system_resources, get_service_troubleshooting_steps_tool ] # removed fetch_logs , troubleshoot_kyc_tool
 
 # Initialize memory
 memory = MemorySaver()
@@ -149,7 +149,7 @@ def display_services(label: str, services: List):
 def display_structured_output(structured_output):
     """Display the structured output in a user-friendly format"""
 
-    print("\n ===== 🤖 MONITORING REPORT =====\n")
+    print("\n ============ ⛑️ DIAGNOSIS REPORT =====\n")
 
     # Display summary
     print(f"📋 SUMMARY: {structured_output.summary}\n")
@@ -174,49 +174,59 @@ def display_structured_output(structured_output):
 def display_typing_effect(message):
     """Display a typing effect for agent responses"""
     for char in message:
-        sys.stdout.write(char)
-        sys.stdout.flush()
+        typer.echo(char, nl=False)
         time.sleep(0.002)
-    print()
+    typer.echo() 
 
-def auto_troubleshoot_kyc_if_needed(structured_output, graph, config):
+def auto_troubleshoot_services_if_needed(structured_output, graph, config):
     """
-    Check for failing KYC services and automatically run troubleshooting through the agent
+    Check for failing services and automatically get troubleshooting guidance through the agent
     """
     from rich import print
-    # Step 1: Check if any KYC services are failing
-    kyc_services = structured_output.services.kyc_services or []
-    failing_services = [
-        svc for svc in kyc_services 
-        if not svc.running or svc.status.lower() in ["error", "not found"]
-    ]
+    
+    # Step 1: Check for failing services across all service categories
+    failing_services = []
+    service_categories = ["kyc_services", "passkeys_services", "hydra_services", "general_services"]
+    
+    for category in service_categories:
+        services = getattr(structured_output.services, category, []) or []
+        category_failing = [
+            {"name": svc.name, "category": category.replace("_services", "")} 
+            for svc in services 
+            if not svc.running or svc.status.lower() in ["error", "not found"]
+        ]
+        failing_services.extend(category_failing)
 
     if not failing_services:
-        print("\n[green]✅ All KYC services are operational. No troubleshooting needed.[/green]")
+        print("\n[green]✅ All services are operational. No troubleshooting needed.[/green]")
         return
 
-    # Step 2: Format a list of failing services for the prompt
-    failing_service_names = ", ".join([svc.name for svc in failing_services])
-    print(f"\n[yellow]⚠️ Found failing KYC services: {failing_service_names}[/yellow]")
-    print("[yellow]🔧 Automatically initiating KYC troubleshooting...[/yellow]\n")
+    # Step 2: Format a list of failing services for the agent
+    failing_service_list = "\n".join([f"- {svc['name']} ({svc['category']})" for svc in failing_services])
+    print(f"\n[yellow]⚠️ Found {len(failing_services)} failing services[/yellow]")
+    print("[yellow]🤖 Let me find the troubleshooting steps for each...[/yellow]\n")
     
-    # Step 3: Craft a troubleshooting instruction for the agent
+    # Step 3: Craft a human-like troubleshooting request for the agent
     troubleshoot_message = f"""
-    URGENT: KYC services are failing. The following services need immediate attention:
-    {failing_service_names}
+    I need your help with troubleshooting some failing services on our system. The following services are currently not running or showing errors:
     
-    Use the troubleshoot_kyc_tool to diagnose and fix these services. Provide a detailed
-    report of what you find and any actions taken and a list of commands to be executed. Return the response in Human friendly way (Not JSON).
-    Finish by asking the user if you can go ahead and start executing one by one
+    {failing_service_list}
+    
+    Could you please:
+    1. Use the get_service_troubleshooting_steps_tool for each failing service to get diagnostic information. You should call it with
+       appropriate service category.
+    2. For services falling under same category, call the tool once otherwise it would be repeating same troubleshooting steps.
+    3. Provide me with a clear set of steps, custom fixes and commands needed to troubleshoot and fix each service.
+    5. Return the response in Human friendly way (Not JSON).
+    6. Finish by asking the user if you can go ahead and start executing one by one
     """
     
     # Step 4: Invoke the agent with the troubleshooting message
-    print("🤖 [Agent is troubleshooting KYC services...]")
     response = graph.invoke({"messages": troubleshoot_message}, config)
     agent_response = response["messages"][-1].content
     
-    # Step 5: Display the response with typing effect for natural conversation
-    print("\n🤖 [KYC Troubleshooting Results]")
+    # Step 5: Display the agent's response
+    print("\n🤖 [Troubleshooting Recommendations]")
     display_typing_effect(agent_response)
 
 @app.command()
@@ -227,32 +237,27 @@ def run_agent(interactive: bool = True):
     Args:
         interactive: Whether to run in interactive mode with continuous conversation
     """
-    typer.echo("\n🤖 AI Agent starting up...")
-    typer.echo("📊 Initializing systems...")
+    typer.echo("\n🤖 BoxFixer starting up...")
 
     instructions = output_parser.get_format_instructions()
     escaped_instructions = instructions.replace("{", "{{").replace("}", "}}")
     
-    # First automated query to check logs and service status
     initial_query = f"""
     As DevOps assistant agent, give the report of the service health check and advise when QAbox is in ready status to start testing
     CRITICAL: At the end of your analysis, you MUST provide a standardized report in JSON format exactly as specified here:
         {escaped_instructions}
     Do not include any text before or after the JSON structure. The JSON should be the only content in your final response.
     """
-    typer.echo(f"\n🔍 Running initial check.....")
+    typer.echo(f"\n🔍 Running initial diagnosis...")
     
-    try:
-        # Run the first query automatically
-     
+    try:     
         response = graph.invoke({"messages": initial_query}, config)
         agent_response = response["messages"][-1].content
-        print(tools)
         try:
             # Try to parse the response into structured format
             structured_output = output_parser.parse(agent_response)
             display_structured_output(structured_output)
-            auto_troubleshoot_kyc_if_needed(structured_output, graph, config)
+            auto_troubleshoot_services_if_needed(structured_output, graph, config)
 
         except Exception as e:
             # Fall back to normal display if parsing fails
@@ -307,7 +312,7 @@ if __name__ == "__main__":
     # Show a banner on startup
     print("""
     ╔════════════════════════════════════╗
-    ║    QAbox Health Checker Agent      ║
+    ║    BoxFixer Agent                  ║
     ╚════════════════════════════════════╝
     """)
     app()
