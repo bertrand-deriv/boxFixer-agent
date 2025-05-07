@@ -22,6 +22,17 @@ from langchain.output_parsers import PydanticOutputParser
 from langchain_core.prompts import PromptTemplate
 from langchain.prompts import ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate
 
+from rich.console import Console
+from rich.table import Table
+from rich.align import Align
+from rich.panel import Panel
+from rich.layout import Layout
+from rich import box
+from rich.text import Text
+from rich.emoji import Emoji
+from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn
+from rich.columns import Columns
+
 class ServiceStatus(BaseModel):
     name: str = Field(description="Name of the service")
     status: str = Field(description="General status indicator, e.g., 'ok', 'not found', 'error'")
@@ -53,6 +64,8 @@ output_parser = PydanticOutputParser(pydantic_object=MonitoringReport)
 load_dotenv()
 
 app = typer.Typer()
+
+console = Console()
 
 # Define tools
 
@@ -131,52 +144,186 @@ graph = create_react_agent(
 # Configuration
 config = {"configurable": {"thread_id": "1"}}
 
-def display_services(label: str, services: List):
-    print(f"\n{label.upper()}:")
-    if services:
-        sorted_services = sorted(services, key=lambda svc: bool(svc.running))
-        for svc in sorted_services:
-            status_emoji = "✅" if svc.running else "❌"
-            print(f"  {status_emoji} {svc.name}")
-            print(f"     Status  : {svc.status}")
-            print(f"     Running : {svc.running}")
-            print(f"     Message : {svc.message}")
-            print(f"     Error   : {svc.error if svc.error else 'None'}")
-    else:
-        print(f"No {label.lower()} found.")
-
-
-def display_structured_output(structured_output):
-    """Display the structured output in a user-friendly format"""
-
-    print("\n ============ ⛑️ DIAGNOSIS REPORT =====\n")
-
-    # Display summary
-    print(f"📋 SUMMARY: {structured_output.summary}\n")
-
-    # Display service categories
-    display_services("KYC Services", structured_output.services.kyc_services)
-    display_services("Passkeys Services", structured_output.services.passkeys_services)
-    display_services("Crypto Services", structured_output.services.crypto_services)
-    display_services("Other Services", structured_output.services.other_services)
-
-    # Display system resources
-    print("\n🔋 SYSTEM RESOURCES:")
-    print(f"  {structured_output.resources}\n")
-
-    # Display recommendations
-    print("\n💡 RECOMMENDATIONS:")
-    for i, rec in enumerate(structured_output.recommendations, 1):
-        print(f"  {i}. {rec}")
-
-    print("\n=============================\n")
-
 def display_typing_effect(message):
     """Display a typing effect for agent responses"""
     for char in message:
-        typer.echo(char, nl=False)
+        typer.echo(char, nl=False)  # nl=False prevents newline after each char
         time.sleep(0.002)
-    typer.echo() 
+    typer.echo()  # Add a newline at the end
+
+def display_service_category(category_name: str, services: Optional[List] = None):
+    """Display a category of services in a styled table"""
+    if not services:
+        return None
+        
+    table = Table(
+        box=box.ROUNDED,
+        expand=True,
+        title=f"{category_name}",
+        title_style="bold cyan",
+        header_style="bold",
+        border_style="blue"
+    )
+    
+    # Define columns
+    table.add_column("Status", justify="center", width=6)
+    table.add_column("Service Name", style="cyan")
+    table.add_column("Status", width=12)
+    table.add_column("Message", style="dim", no_wrap=False)
+    
+    # Add rows
+    sorted_services = sorted(services, key=lambda svc: (not svc.running, svc.name))
+    for service in sorted_services:
+        status_emoji = "✅" if service.running else "❌"
+        status_color = "green" if service.running else "red"
+        error_text = f"\n[bold red]Error:[/bold red] {service.error}" if service.error else ""
+        
+        table.add_row(
+            status_emoji,
+            service.name,
+            f"[{status_color}]{service.status}[/{status_color}]",
+            f"{service.message}{error_text}"
+        )
+    
+    return table
+
+def create_resource_panel(resources):
+    """Create a panel displaying system resource usage"""
+    # Parse percentages for color coding
+    def get_color(value):
+        try:
+            if isinstance(value, str) and '%' in value:
+                percent = float(value.replace('%', ''))
+                if percent > 90:
+                    return "bold red"
+                elif percent > 70:
+                    return "bold yellow"
+                return "bold green"
+        except ValueError:
+            pass
+        return "bold"
+    
+    cpu_line = f"[{get_color(resources.cpu_usage)}]CPU Usage:[/{get_color(resources.cpu_usage)}] {resources.cpu_usage}"
+    mem_line = f"[{get_color(resources.memory_usage)}]Memory Usage:[/{get_color(resources.memory_usage)}] {resources.memory_usage}"
+    disk_line = f"[{get_color(resources.disk_usage)}]Disk Usage:[/{get_color(resources.disk_usage)}] {resources.disk_usage}"
+    
+    content = f"{cpu_line}\n{mem_line}\n{disk_line}"
+    
+    return Panel(
+        content,
+        title="🔋 System Resources",
+        border_style="cyan",
+        box=box.ROUNDED
+    )
+
+def display_structured_output(structured_output):
+    """Display the structured output in a visually appealing format"""
+    # Create header with animation
+    with Progress(
+        TextColumn("[bold blue]Generating diagnostic report..."),
+        BarColumn(bar_width=40),
+        TextColumn("[bold green]{task.percentage:.0f}%"),
+        transient=True
+    ) as progress:
+        task = progress.add_task("", total=100)
+        for i in range(101):
+            progress.update(task, completed=i)
+            time.sleep(0.01)
+    
+    # Banner
+    console.print("\n")
+    console.rule("[bold white on blue]⛑️  DIAGNOSTIC REPORT  ⛑️[/bold white on blue]", style="blue")
+    
+    # Summary section
+    console.print("\n")
+    summary_panel = Panel(
+        structured_output.summary,
+        title="📋 Summary",
+        border_style="cyan",
+        box=box.ROUNDED
+    )
+    console.print(summary_panel)
+    console.print("\n")
+    
+    # Resource section
+    resource_panel = create_resource_panel(structured_output.resources)
+    console.print(resource_panel)
+    console.print("\n")
+    
+    # Services section
+    
+    # Calculate overall service health
+    all_services = []
+    
+    kyc_services = structured_output.services.kyc_services or []
+    passkeys_services = structured_output.services.passkeys_services or []
+    crypto_services = structured_output.services.crypto_services or []
+    other_services = structured_output.services.other_services or []
+    
+    all_services.extend(kyc_services)
+    all_services.extend(passkeys_services)
+    all_services.extend(crypto_services)
+    all_services.extend(other_services)
+    
+    total_services = len(all_services)
+    running_services = sum(1 for svc in all_services if svc.running)
+    
+    if total_services > 0:
+        health_percentage = (running_services / total_services) * 100
+        health_color = "green" if health_percentage >= 90 else "yellow" if health_percentage >= 70 else "red"
+        health_text = f"[bold]System Health:[/bold] [bold {health_color}]{health_percentage:.1f}%[/bold {health_color}] ({running_services} of {total_services} services running)"
+        health_text_panel = Panel(
+            health_text,
+            title="🔌 Services",
+            border_style="cyan",
+            box=box.ROUNDED
+        )
+        console.print(health_text_panel)
+        console.print("\n")
+
+    # Display services by category
+    if kyc_services:
+        kyc_table = display_service_category("KYC Services", kyc_services)
+        console.print(kyc_table)
+        console.print("\n")
+        
+    if passkeys_services:
+        passkeys_table = display_service_category("Passkeys Services", passkeys_services)
+        console.print(passkeys_table)
+        console.print("\n")
+        
+    if crypto_services:
+        crypto_table = display_service_category("Crypto Services", crypto_services)
+        console.print(crypto_table)
+        console.print("\n")
+        
+    if other_services:
+        other_table = display_service_category("Other Services", other_services)
+        console.print(other_table)
+        console.print("\n")
+    
+    # Display recommendations
+    recommendations = structured_output.recommendations
+    if recommendations:
+        console.rule("[bold blue]💡 Recommendations[/bold blue]", style="blue")
+        console.print("\n")
+        
+        for i, recommendation in enumerate(recommendations, 1):
+            rec_panel = Panel(
+                recommendation,
+                title=f"Recommendation #{i}",
+                border_style="cyan",
+                box=box.ROUNDED
+            )
+            console.print(rec_panel)
+            console.print("\n")
+    
+    # Footer
+    timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+    footer = Text(f"Report generated by BoxFixer at {timestamp}", style="italic dim")
+    console.print(footer, justify="center")
+    console.rule(style="blue")
+
 
 def auto_troubleshoot_services_if_needed(structured_output, graph, config):
     """
@@ -239,6 +386,8 @@ def run_agent(interactive: bool = True):
     """
     typer.echo("\n🤖 BoxFixer starting up...")
 
+    typer.echo("\n🔚 Type 'exit' or 'quit' to end the session.")
+
     instructions = output_parser.get_format_instructions()
     escaped_instructions = instructions.replace("{", "{{").replace("}", "}}")
     
@@ -250,28 +399,25 @@ def run_agent(interactive: bool = True):
     """
     typer.echo(f"\n🔍 Running initial diagnosis...")
     
-    try:     
+    try: 
+        with console.status("[bold blue]Analyzing your system...", spinner="dots") as status:  
+            time.sleep(2)  
+            status.update("[bold yellow]Running Service health check tools...")
+            time.sleep(2)  
+            status.update("[bold green]Processing results...") 
+            time.sleep(2)  
         response = graph.invoke({"messages": initial_query}, config)
         agent_response = response["messages"][-1].content
         try:
-            # Try to parse the response into structured format
             structured_output = output_parser.parse(agent_response)
             display_structured_output(structured_output)
             auto_troubleshoot_services_if_needed(structured_output, graph, config)
 
         except Exception as e:
-            # Fall back to normal display if parsing fails
-            typer.echo("\n🤖 Agent response (raw format - parsing failed):")
+            typer.echo("\n🤖 Agent response:")
             typer.echo(f"\nParsing error: {str(e)}")
             display_typing_effect(agent_response)        
-        if not interactive:
-            typer.echo("\n✅ Agent task completed.")
-            return
-        
-        # Continue with interactive mode
-        typer.echo("\n🔄 Entering interactive mode. Type 'exit' or 'quit' to end the session.")
-        
-        # Interactive loop
+                
         while True:
             user_input = typer.prompt("\n💬 You")
             
@@ -280,7 +426,8 @@ def run_agent(interactive: bool = True):
                 break
                 
             try:
-                # Process the user query through the agent
+                with console.status("[bold cyan]Thinking...", spinner="dots") as status:
+                    time.sleep(2)
                 response = graph.invoke({"messages": user_input}, config)
                 agent_response = response["messages"][-1].content
                 try:
@@ -309,11 +456,14 @@ def check_services_cmd():
         typer.echo(f"\n❌ Error checking services: {str(e)}")
 
 if __name__ == "__main__":
-    # Show a banner on startup
-    print("""
-    ╔════════════════════════════════════╗
-    ║    BoxFixer Agent                  ║
-    ╚════════════════════════════════════╝
-    """)
+    text = f"[bold blue]BoxFixer Agent"
+    centered_text = Align.center(text)
+    start_panel = Panel(
+        centered_text,
+        border_style="cyan",
+        box=box.ROUNDED
+    )
+    console.print(start_panel)
+    console.print("\n")
     app()
 
