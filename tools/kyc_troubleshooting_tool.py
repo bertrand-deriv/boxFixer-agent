@@ -84,7 +84,7 @@ def troubleshoot_kyc(run_commands: bool = False):
     # Step 5: Check if pods are running
     results.append("\n🔍 Step 5: Checking if KYC pods are running...")
     try:
-        kubectl_cmd = "kubectl get pods | grep -E 'service-kyc|business-rules'"
+        kubectl_cmd = "kubectl get pods -n <qabox number e.g qa40> | grep -E 'service-kyc|business-rules'"
         kubectl_result = subprocess.run(kubectl_cmd, shell=True, capture_output=True, text=True)
         
         if kubectl_result.returncode == 0 and kubectl_result.stdout.strip():

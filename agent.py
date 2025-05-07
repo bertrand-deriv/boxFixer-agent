@@ -12,6 +12,7 @@ from tools.service_health_check_tool import check_services
 from tools.command_executor_tool import execute_shell_command
 from tools.resource_monitoring_tool import check_system_resources
 from tools.kyc_troubleshooting_tool import troubleshoot_kyc
+from tools.get_service_troubleshooting_steps import get_service_troubleshooting_steps
 from dotenv import load_dotenv
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.prebuilt import create_react_agent
@@ -64,6 +65,19 @@ def fetch_service_status():
 def troubleshoot_kyc_tool():
     """Troubleshoot KYC service ."""
     return troubleshoot_kyc()
+
+@tool
+def get_service_troubleshooting_steps_tool(service_name: str):
+    """
+    Retrieves diagnostic steps and troubleshooting information for a service.
+    
+    Args:
+        service_name (str): The name of the service to troubleshoot (e.g., "kyc_services", "passkeys_services", "hydra_services")
+        
+    Returns:
+        dict: A dictionary containing troubleshooting steps, common fixes, and additional tips
+    """
+    return get_service_troubleshooting_steps(service_name)
 
 
 system_message = SystemMessagePromptTemplate.from_template(
