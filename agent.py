@@ -9,7 +9,7 @@ from langchain_core.tools import tool
 from langchain_core.messages import SystemMessage
 from tools.log_monitor_tool import check_logs_once
 from tools.service_health_check_tool import check_services
-from tools.command_executor_tool import execute_shell_command
+from tools.command_executor_tool import execute_shell_command_tool
 from tools.resource_monitoring_tool import check_system_resources
 from tools.kyc_troubleshooting_tool import troubleshoot_kyc
 from tools.get_troubleshooting_steps import get_service_troubleshooting_steps
@@ -75,11 +75,6 @@ def fetch_service_status_tool():
     return check_services()
 
 @tool
-def troubleshoot_kyc_tool():
-    """Troubleshoot KYC service ."""
-    return troubleshoot_kyc()
-
-@tool
 def get_service_troubleshooting_steps_tool(service_name: str):
     """
     Retrieves diagnostic steps and troubleshooting information for a service.
@@ -128,7 +123,7 @@ llm = ChatLiteLLM(
     api_key=os.getenv("API_KEY")
 )
 # Set up tools
-tools = [ fetch_service_status_tool, execute_shell_command, check_system_resources, get_service_troubleshooting_steps_tool ] # removed fetch_logs , troubleshoot_kyc_tool
+tools = [ fetch_service_status_tool, execute_shell_command_tool, check_system_resources, get_service_troubleshooting_steps_tool ] # removed fetch_logs , troubleshoot_kyc_tool
 
 # Initialize memory
 memory = MemorySaver()

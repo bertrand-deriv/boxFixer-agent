@@ -3,8 +3,14 @@ import shlex
 from langchain_core.tools import tool
 
 @tool
-def execute_shell_command(command: str) -> str:
-    """Execute a shell command and return its output."""
+def execute_shell_command_tool(command: str) -> str:
+    """
+    Execute a shell command and return its output.
+    Args:
+    command (str): The command to execute
+    Returns:
+        str: results as a string
+    """
     # List of potentially dangerous commands to block
     unsafe_commands = [
         'sudo', 'rm -rf', 'dd', 'mkfs', 
