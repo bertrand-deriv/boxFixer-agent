@@ -70,8 +70,8 @@ console = Console()
 # Define tools
 
 @tool
-def fetch_service_status():
-    """Checks service health using the service checker tool."""
+def fetch_service_status_tool():
+    """Checks services health using the check_services function"""
     return check_services()
 
 @tool
@@ -103,7 +103,7 @@ system_message = SystemMessagePromptTemplate.from_template(
         4. Communicate in a helpful manner
 
         Tools available and their purpose:
-        - fetch_service_status: Use this tool to get different service statuses including system statuses, docker services, k8s pods
+        - fetch_service_status_tool: Use this tool to get different service statuses including system statuses, docker services, k8s pods
                                 Use this tool also to advice whether the host (QAbox) needs a rebuild. If more than 2 services has been 
                                 running for 5 days its advisable to rebuild the QAbox
         - execute_shell_command: Use this tool to execute commands in terminal. Always ask for user approval before executing command.
@@ -128,7 +128,7 @@ llm = ChatLiteLLM(
     api_key=os.getenv("API_KEY")
 )
 # Set up tools
-tools = [ fetch_service_status, execute_shell_command, check_system_resources, get_service_troubleshooting_steps_tool ] # removed fetch_logs , troubleshoot_kyc_tool
+tools = [ fetch_service_status_tool, execute_shell_command, check_system_resources, get_service_troubleshooting_steps_tool ] # removed fetch_logs , troubleshoot_kyc_tool
 
 # Initialize memory
 memory = MemorySaver()
