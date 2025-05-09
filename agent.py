@@ -7,12 +7,13 @@ from typing import List, Optional, Dict
 from langchain_community.chat_models import ChatLiteLLM
 from langchain_core.tools import tool
 from langchain_core.messages import SystemMessage
+
 from tools.log_monitor_tool import check_logs_once
 from tools.service_health_check_tool import check_services
 from tools.command_executor_tool import execute_shell_command_tool
 from tools.resource_monitoring_tool import check_system_resources
-from tools.kyc_troubleshooting_tool import troubleshoot_kyc
-from tools.get_troubleshooting_steps import get_service_troubleshooting_steps
+from tools.get_troubleshooting_steps_tool import get_service_troubleshooting_steps
+
 from dotenv import load_dotenv
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.prebuilt import create_react_agent
@@ -68,9 +69,8 @@ app = typer.Typer()
 console = Console()
 
 # Define tools
-
 @tool
-def fetch_service_status_tool():
+def get_service_status_tool():
     """Checks services health using the check_services function"""
     return check_services()
 
@@ -87,6 +87,10 @@ def get_service_troubleshooting_steps_tool(service_name: str):
     """
     return get_service_troubleshooting_steps(service_name)
 
+@tool
+def get_system_resources_tool():
+    """Get basic CPU, memory, and disk usage percentages.""" 
+    return check_system_resources()
 
 system_message = SystemMessagePromptTemplate.from_template(
     f"""
@@ -98,13 +102,12 @@ system_message = SystemMessagePromptTemplate.from_template(
         4. Communicate in a helpful manner
 
         Tools available and their purpose:
-        - fetch_service_status_tool: Use this tool to get different service statuses including system statuses, docker services, k8s pods
+        - get_service_status_tool: Use this tool to get different service statuses including system statuses, docker services, k8s pods
                                 Use this tool also to advice whether the host (QAbox) needs a rebuild. If more than 2 services has been 
                                 running for 5 days its advisable to rebuild the QAbox
-        - execute_shell_command: Use this tool to execute commands in terminal. Always ask for user approval before executing command.
-        - check_system_resources: Use this tool to check system resource usage. If there's any red flags, report them. It is advisable to rebuild
+        - execute_shell_command_tool: Use this tool to execute commands in terminal. Always ask for user approval before executing command.
+        - get_system_resources_tool: Use this tool to check system resource usage. If there's any red flags, report them. It is advisable to rebuild
                                   QAbox when either Disk, CPU or memory is at bottleneck.
-        - troubleshoot_ky_tool: Use this to troubleshoot the kyc service
 
         Constraints:
         - Never attempt to execute potentially dangerous commands
@@ -123,7 +126,7 @@ llm = ChatLiteLLM(
     api_key=os.getenv("API_KEY")
 )
 # Set up tools
-tools = [ fetch_service_status_tool, execute_shell_command_tool, check_system_resources, get_service_troubleshooting_steps_tool ] # removed fetch_logs , troubleshoot_kyc_tool
+tools = [ get_service_status_tool, execute_shell_command_tool, get_system_resources_tool, get_service_troubleshooting_steps_tool ]
 
 # Initialize memory
 memory = MemorySaver()
