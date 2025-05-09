@@ -375,12 +375,9 @@ def auto_troubleshoot_services_if_needed(structured_output, graph, config):
     display_typing_effect(agent_response)
 
 @app.command()
-def run_agent(interactive: bool = True):
+def run_agent():
     """
     Runs the AI agent to fetch logs and service status.
-    
-    Args:
-        interactive: Whether to run in interactive mode with continuous conversation
     """
     typer.echo("\n🤖 BoxFixer starting up...")
 
@@ -444,14 +441,32 @@ def run_agent(interactive: bool = True):
 
 @app.command()
 def check_services_cmd():
-    """Run a quick check on service status only."""
-    typer.echo("\n🔍 Checking service status...")
-    
+    """Run a quick check to get services status."""
+    typer.echo("\n🔍 Checking service status...\n")
     try:
         results = check_services()
         typer.echo(results)
     except Exception as e:
         typer.echo(f"\n❌ Error checking services: {str(e)}")
+
+@app.command()
+def get_tb_steps( service: str = typer.Argument(..., help="e.g: kyc_services, hydra_services, etc")):
+    """Get troubleshooting steps for particular services"""
+    typer.echo(f"\n🔍 Fetching troubleshooting steps for {service}...\n")
+    try:
+        results = get_service_troubleshooting_steps(service)
+        typer.echo(results)
+    except Exception as e:
+        typer.echo(f"\n❌ Error Getting troubleshooting steps: {str(e)}")
+
+@app.command()
+def check_sys_resources():
+    """Get System resources like CPU, Memory, Disk space"""
+    try:
+        results = check_system_resources()
+        typer.echo(results)
+    except Exception as e:
+        typer.echo(f"\n❌ Error Getting system resources: {str(e)}")
 
 if __name__ == "__main__":
     text = f"[bold blue]BoxFixer Agent"
