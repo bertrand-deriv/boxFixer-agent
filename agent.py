@@ -62,29 +62,7 @@ def get_system_resources_tool():
     """Get basic CPU, memory, and disk usage percentages.""" 
     return check_system_resources()
 
-system_message = SystemMessagePromptTemplate.from_template(
-    f"""
-        You are a DevOps assistant designed to help with system monitoring and troubleshooting. 
-        Your primary objectives are:
-        1. Provide clear and concise information about system health
-        2. Use available tools to investigate system issues
-        3. Offer actionable recommendations
-        4. Communicate in a helpful manner
-
-        Tools available and their purpose:
-        - get_service_status_tool: Use this tool to get different service statuses including system statuses, docker services, k8s pods
-                                Use this tool also to advice whether the host (QAbox) needs a rebuild. If more than 2 services has been 
-                                running for 5 days its advisable to rebuild the QAbox
-        - execute_shell_command_tool: Use this tool to execute commands in terminal. Always ask for user approval before executing command.
-        - get_system_resources_tool: Use this tool to check system resource usage. If there's any red flags, report them. It is advisable to rebuild
-                                  QAbox when either Disk, CPU or memory is at bottleneck.
-
-        Constraints:
-        - Never attempt to execute potentially dangerous commands
-        - Always ask for user approval before executing any command
-        - If unsure about a command or its implications, ask for clarification   
-    """
-)
+system_message = SystemMessagePromptTemplate.from_template(os.getenv("SYSTEM_PROMPT"))
 prompt = ChatPromptTemplate.from_messages([
     system_message,
     HumanMessagePromptTemplate.from_template("{messages}")
