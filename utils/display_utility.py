@@ -8,9 +8,30 @@ from rich import box
 from rich.text import Text
 from rich.progress import Progress, TextColumn, BarColumn
 
-def display_typing_effect(message):
-    """Display a typing effect for agent responses"""
-    for char in message:
+# Create a custom theme to enhance markdown colors
+custom_theme = Theme({
+    "heading": "bold blue",
+    "strong": "bold yellow",  # Bold text
+    "em": "italic green",     # Italic text
+    "code": "bold cyan on black", # Inline code
+    "block.code": "cyan on black",  # Code blocks
+    "link": "bold blue underline",
+    "blockquote": "italic yellow",
+})
+
+def display_markdown_response(message):
+    """Display agent response as rendered markdown with typing effect and colors"""
+    # Create console with custom theme
+    console = Console(theme=custom_theme, highlight=True)
+    markdown = Markdown(message)
+    
+    # Render the markdown to a string with ANSI codes
+    with console.capture() as capture:
+        console.print(markdown)
+    rendered_text = capture.get()
+    
+    # Display with typing effect
+    for char in rendered_text:
         typer.echo(char, nl=False)
         time.sleep(0.002)
     typer.echo()

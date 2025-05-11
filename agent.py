@@ -21,7 +21,7 @@ from tools.command_executor_tool import execute_shell_command_tool
 from tools.resource_monitoring_tool import check_system_resources
 from tools.get_troubleshooting_steps_tool import get_service_troubleshooting_steps
 
-from utils.display_utility import display_typing_effect, display_structured_output
+from utils.display_utility import display_markdown_response, display_structured_output
 from utils.pydantic_class_utility import MonitoringReport
 from utils.troubleshoot_service_utility import auto_troubleshoot_services_if_needed
 
@@ -62,7 +62,27 @@ def get_system_resources_tool():
     """Get basic CPU, memory, and disk usage percentages.""" 
     return check_system_resources()
 
-system_message = SystemMessagePromptTemplate.from_template(os.getenv("SYSTEM_PROMPT"))
+system_message = SystemMessagePromptTemplate.from_template(f"""
+            You are a DevOps assistant designed to help with system monitoring and troubleshooting. 
+            Your primary objectives are:
+            1. Provide clear and concise information about system health
+            2. Use available tools to investigate system issues
+            3. Offer actionable recommendations
+            4. Communicate in a helpful manner
+
+            Tools available and their purpose:
+            - get_service_status_tool: Use this tool to get different service statuses including system statuses, docker services, k8s pods
+                                    Use this tool also to advice whether the host (QAbox) needs a rebuild. If more than 2 services has been 
+                                    running for 5 days its advisable to rebuild the QAbox
+            - execute_shell_command_tool: Use this tool to execute commands in terminal. Always ask for user approval before executing command.
+            - get_system_resources_tool: Use this tool to check system resource usage. If there's any red flags, report them. It is advisable to rebuild
+                                    QAbox when either Disk, CPU or memory is at bottleneck.
+
+            Constraints:
+            - Never attempt to execute potentially dangerous commands
+            - Always ask for user approval before executing any command
+            - If unsure about a command or its implications, ask for clarification
+              """)
 prompt = ChatPromptTemplate.from_messages([
     system_message,
     HumanMessagePromptTemplate.from_template("{messages}")
@@ -123,12 +143,12 @@ def run_agent():
         try:
             structured_output = output_parser.parse(agent_response)
             display_structured_output(structured_output, console)
-            auto_troubleshoot_services_if_needed(structured_output, graph, config, display_typing_effect)
+            auto_troubleshoot_services_if_needed(structured_output, graph, config, display_markdown_response)
 
         except Exception as e:
             typer.echo("\n🤖 Agent response:")
             typer.echo(f"\nParsing error: {str(e)}")
-            display_typing_effect(agent_response)        
+            display_markdown_response(agent_response)        
                 
         while True:
             user_input = typer.prompt("\n💬 You")
@@ -146,7 +166,7 @@ def run_agent():
                     display_structured_output(structured_output, console)
                 except Exception as e:
                     typer.echo("\n🤖 Agent response:")
-                    display_typing_effect(agent_response)
+                    display_markdown_response(agent_response)
             except Exception as e:
                 typer.echo(f"\n❌ Error processing query: {str(e)}")
                 
