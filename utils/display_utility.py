@@ -7,6 +7,9 @@ from rich.panel import Panel
 from rich import box
 from rich.text import Text
 from rich.progress import Progress, TextColumn, BarColumn
+from rich.markdown import Markdown
+from rich.theme import Theme
+
 
 # Create a custom theme to enhance markdown colors
 custom_theme = Theme({
