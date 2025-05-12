@@ -106,8 +106,8 @@ def run_agent():
 
     instructions = output_parser.get_format_instructions()
     escaped_instructions = instructions.replace("{", "{{").replace("}", "}}")
-    
-    initial_query = prompts.get_prompt("initial", escaped_instructions)
+    initial_query = prompts.get_prompt("initial", escaped_instructions=escaped_instructions)
+    print(initial_query)
     typer.echo(f"\n🔍 Running initial diagnosis...")
     
     try: 

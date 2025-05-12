@@ -23,8 +23,8 @@ class PromptManager:
                 self.templates[name] = value.replace("\\n", "\n")
     
     def get_prompt(self, template_name, **kwargs):
-        """Get a prompt with arguments filled in
-        
+        """
+        Get a prompt with arguments filled in
         Args:
             template_name: Name of the prompt template to use
             **kwargs: Arguments to fill into the template
@@ -34,9 +34,14 @@ class PromptManager:
         """
         if template_name not in self.templates:
             raise ValueError(f"Unknown prompt template: {template_name}")
-            
         template = Template(self.templates[template_name])
-        return template.safe_substitute(**kwargs)
+        result = template.safe_substitute(**kwargs)
+        
+        # Debug output
+        print(f"Template variables: {kwargs.keys()}")
+        print(f"Substitution result contains placeholder? {'${' in result}")
+        
+        return result
     
     def list_available_prompts(self):
         """List all available prompt templates"""

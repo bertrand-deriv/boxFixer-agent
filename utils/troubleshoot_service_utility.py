@@ -32,7 +32,7 @@ def auto_troubleshoot_services_if_needed(structured_output, graph, config, displ
     print(f"\n[yellow]⚠️ Found {len(failing_services)} failing services[/yellow]\n")
     print("[yellow]🤖 Let me find the troubleshooting steps for each...[/yellow]\n")
 
-    troubleshoot_prompt = prompts.get_prompt("troubleshoot", failing_service_list)
+    troubleshoot_prompt = prompts.get_prompt("troubleshoot", failing_service_list=failing_service_list)
    
     # Step 3: Invoke the agent with the troubleshooting message
     response = graph.invoke({"messages": troubleshoot_prompt}, config)

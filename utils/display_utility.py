@@ -9,7 +9,7 @@ from rich.text import Text
 from rich.progress import Progress, TextColumn, BarColumn
 from rich.markdown import Markdown
 from rich.theme import Theme
-
+from rich.console import Console
 
 # Create a custom theme to enhance markdown colors
 custom_theme = Theme({
