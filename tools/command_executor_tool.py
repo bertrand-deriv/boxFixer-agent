@@ -22,9 +22,7 @@ def execute_shell_command_tool(command: str) -> str:
         return "Error: Command blocked for security reasons."
     
     try:
-        # Split the command safely
         split_command = shlex.split(command)
-        
         # Run the command
         result = subprocess.run(
             split_command, 
@@ -33,7 +31,6 @@ def execute_shell_command_tool(command: str) -> str:
             timeout=30  # 30-second timeout
         )
         
-        # Combine stdout and stderr
         if result.returncode == 0:
             return result.stdout.strip() or "Command executed successfully with no output."
         else:

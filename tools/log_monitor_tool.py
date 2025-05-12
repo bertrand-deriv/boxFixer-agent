@@ -6,7 +6,6 @@ import argparse
 import sys
 from typing import List, Dict, Any, Optional
 
-# Patterns for identifying errors and warnings
 ERROR_PATTERN = re.compile(r"\bE\b|error", re.IGNORECASE)
 WARNING_PATTERN = re.compile(r"\bW\b|warn", re.IGNORECASE)
 
@@ -24,14 +23,12 @@ def extract_message_from_json(line: str) -> str:
         if "message" in data:
             return data['message']
         else:
-            # If no message field, check for other common message field names
             for field in ["msg", "text", "log", "error"]:
                 if field in data:
                     return data[field]  
-            # If we can't find a message field, return a simplified representation
             return f"[JSON log with no message field: {data.get('severity', 'unknown')} level]"
     except:
-        return line # If it's not valid JSON, return the original line
+        return line
 
 def colorize_log(line: str, errors_only: bool = False, no_color: bool = False) -> Optional[str]:
     """Apply color to error and warning logs for better visibility."""
@@ -53,7 +50,6 @@ def colorize_log(line: str, errors_only: bool = False, no_color: bool = False) -
 def get_recent_logs(log_files: List[str]) -> List[str]:
     """Retrieve the most recent logs."""
     try:
-        # Handles both normal and gzipped files
         files_str = " ".join(log_files)
         
         cmd = f"""
@@ -101,17 +97,14 @@ def check_logs_once(
     Returns:
         String containing the log analysis results
     """
-    # Default log files if none specified
     if log_files is None:
         log_files = [
             "/var/log/deriv/*",
             "/var/log/httpd/*"
         ]
     
-    # Get the log lines
     log_lines = get_recent_logs(log_files)
     
-    # Process and collect results
     results = []
     for line in log_lines:
         if not line.strip():
@@ -121,15 +114,12 @@ def check_logs_once(
         if colorized_line:
             results.append(colorized_line)
     
-    # Format the output
     if not results:
         return "No errors or warnings found in the recent logs."
     
     if for_agent:
-        # Format for agent consumption (plain text summary)
         return f"Found {len(results)} issues in logs:\n" + "\n".join(results)
     else:
-        # Format for human consumption (with colors if enabled)
         return "\n".join(results)
 
 def monitor_logs_continuous(

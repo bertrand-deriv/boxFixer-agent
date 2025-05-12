@@ -3,21 +3,7 @@ import subprocess
 import json
 import re
 from typing import List, Dict, Any, Optional
-
-# List of important services to check
-DEFAULT_SERVICES = [
-    "crypto_cashier_paymentapi",
-    "kyc_identity_verification",
-    "service-kyc-rules",
-    "service-business-rule",
-    "passkeys",
-    "deriv-redis-passkeys",
-    "deriv-passkeys-gray",
-    "pgbouncer",
-    "pgbouncer-chart",
-    "pgbouncer-chart-gray",
-    "dd_agent"
-]
+from config.services_config import DEFAULT_SERVICES
 
 # Get the hostname for kubernetes
 hostname_process = subprocess.run("hostname", shell=True, capture_output=True, text=True)
@@ -77,9 +63,9 @@ def check_service_status(service_name: str) -> Dict[str, Any]:
                         # Extract pod status from kubectl output
                         # Format typically: NAMESPACE NAME READY STATUS RESTARTS AGE
                         pod_info = k8s_process.stdout.strip().split()
-                        if len(pod_info) >= 4:  # Ensure we have enough columns
+                        if len(pod_info) >= 4:
                             namespace = hostname
-                            pod_status = pod_info[3]  # Status column
+                            pod_status = pod_info[3]
                             
                             if pod_status.lower() == "running":
                                 result["status"] = "ok"

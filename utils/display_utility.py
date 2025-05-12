@@ -11,7 +11,6 @@ from rich.markdown import Markdown
 from rich.theme import Theme
 from rich.console import Console
 
-# Create a custom theme to enhance markdown colors
 custom_theme = Theme({
     "heading": "bold blue",
     "strong": "bold yellow",  # Bold text
@@ -24,10 +23,9 @@ custom_theme = Theme({
 
 def display_markdown_response(message):
     """Display agent response as rendered markdown with typing effect and colors"""
-    # Create console with custom theme
     console = Console(theme=custom_theme, highlight=True)
     markdown = Markdown(message)
-    
+
     # Render the markdown to a string with ANSI codes
     with console.capture() as capture:
         console.print(markdown)
@@ -77,7 +75,6 @@ def display_service_category(category_name: str, services: Optional[List] = None
 
 def create_resource_panel(resources):
     """Create a panel displaying system resource usage"""
-    # Parse percentages for color coding
     def get_color(value):
         try:
             if isinstance(value, str) and '%' in value:
@@ -106,7 +103,7 @@ def create_resource_panel(resources):
 
 def display_structured_output(structured_output, console):
     """Display the structured output in a visually appealing format"""
-    # Create header with animation
+    # Create progress bar
     with Progress(
         TextColumn("[bold blue]Generating diagnostic report..."),
         BarColumn(bar_width=40),
