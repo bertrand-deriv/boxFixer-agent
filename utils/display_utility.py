@@ -13,10 +13,10 @@ from rich.console import Console
 
 custom_theme = Theme({
     "heading": "bold blue",
-    "strong": "bold yellow",  # Bold text
-    "em": "italic green",     # Italic text
-    "code": "bold cyan on black", # Inline code
-    "block.code": "cyan on black",  # Code blocks
+    "strong": "bold yellow",
+    "em": "italic green",
+    "code": "bold cyan on black",
+    "block.code": "cyan on black",
     "link": "bold blue underline",
     "blockquote": "italic yellow",
 })
@@ -34,7 +34,7 @@ def display_markdown_response(message):
     # Display with typing effect
     for char in rendered_text:
         typer.echo(char, nl=False)
-        time.sleep(0.002)
+        time.sleep(0.0002)
     typer.echo()
 
 def display_service_category(category_name: str, services: Optional[List] = None):

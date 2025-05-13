@@ -1,3 +1,6 @@
+import subprocess
+hostname_process = subprocess.run("hostname", shell=True, capture_output=True, text=True)
+hostname = hostname_process.stdout.strip().split('.')[0]
 DEFAULT_SERVICES = [
     "crypto_cashier_paymentapi",
     "kyc_identity_verification",
@@ -16,8 +19,11 @@ TROUBLESHOOTING_STEPS_MAP = {
     "kyc_services": {
         "steps": [
             {
-                "name": "Check if service_kyc tag exists in tags.json",
-                "commands": ["grep 'service_kyc' /etc/chef/chef/tags/qa.json"]
+                "name": "Check if service_kyc tag exists in tags.json, If not, then it needs to be added",
+                "commands": [
+                    "grep 'service_kyc' /etc/chef/chef/tags/qa.json",
+                    "jq '.tags += [\"service_kyc\"]' /etc/chef/chef/tags/qa.json > temp.json && mv temp.json /etc/chef/chef/tags/qa.json"
+                    ]
             },
             {
                 "name": "Check if required KYC service folders exist",
@@ -47,35 +53,39 @@ TROUBLESHOOTING_STEPS_MAP = {
                 ]
             },
             {
-                "name": "Check hosts file for k8s-lb-local.deriv.local entry",
+                "name": "Check hosts file for k8s-lb-local.deriv.local entry, if not then add it",
                 "commands": [
-                    "grep '10.14.20.218 k8s-lb-local.deriv.local' /etc/hosts || echo 'No k8s-lb-local.deriv.local entry found in /etc/hosts'"
+                    "grep '10.14.20.218 k8s-lb-local.deriv.local' /etc/hosts",
+                    "echo '10.14.20.218 k8s-lb-local.deriv.local' >> /etc/hosts"
                 ]
             },
             {
                 "name": "Restart BSDB",
                 "commands": [
-                    "cd /home/git/regentmarkets/bom-postgres-bsdb/kyc && make pgtap.port"
+                    "sh -c \"cd /home/git/regentmarkets/bom-postgres-bsdb/kyc && make pgtap.port\""
                 ]
             },
             {
                 "name": "Check if KYC pods are running",
                 "commands": [
-                    "kubectl get pods -n <qabox e.g qa40>"
+                    f"kubectl get pods -n {hostname}"
                 ]
             },
 
         ],
         "common_fixes": [
+            "Sometimes you need to update image tag in the service-kyc-rules/values.yaml to the latest",
             "Add service_kyc tag to /etc/chef/chef/tags/qa.json and run chef-client",
-            "Fix missing service folders (if needed)",
+            "Fix missing service folders (if needed) in /home/git/regentmarkets/environment-manifests-qa/k8s",
             "Add this entry in hosts: echo '10.14.20.218 k8s-lb-local.deriv.local' | sudo tee -a /etc/hosts",
-            "Restard bsdb: cd /home/git/regentmarkets/bom-postgres-bsdb/kyc && make pgtap.port"
+            "Restart bsdb: cd /home/git/regentmarkets/bom-postgres-bsdb/kyc && make pgtap.port",
+
         ],
         "other_tips": [
             "KYC service requires  service-kyc-rules and business-rules service to be running",
             "Add this entry in hosts: echo '10.14.20.218 k8s-lb-local.deriv.local' in /etc/hosts",
-            "Restart all services"
+            "Restart all services",
+            "If all troubleshooting is not helping, You need to ask qa-kyc team"
         ]
     },
     
