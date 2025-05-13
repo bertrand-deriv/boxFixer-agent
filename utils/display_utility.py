@@ -12,13 +12,12 @@ from rich.theme import Theme
 from rich.console import Console
 
 custom_theme = Theme({
-    "heading": "bold blue",
+    "heading.level2": "bold blue",
     "strong": "bold yellow",
-    "em": "italic green",
     "code": "bold cyan on black",
     "block.code": "cyan on black",
     "link": "bold blue underline",
-    "blockquote": "italic yellow",
+    "blockquote": "bold cyan on black",
 })
 
 def display_markdown_response(message):
