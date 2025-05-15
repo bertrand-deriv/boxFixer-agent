@@ -23,7 +23,6 @@ DEFAULT_SERVICES = [
     "pgbouncer-chart",
     "pgbouncer-chart-gray",
     "mt5webapi_nginx",
-    "mt5webapi_real_p03_ts01"
     "mt5webapi_real_p01_ts02",
     "mt5webapi_real_p01_ts04",
     "mt5webapi_demo_p01_ts01",

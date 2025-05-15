@@ -17,7 +17,7 @@ class ServicesOutput(BaseModel):
     passkeys_services: Optional[List[ServiceStatus]] = Field(description="All services that has word 'passkeys' in their name. If there's none, return null")
     mt5_services: Optional[List[ServiceStatus]] = Field(description="All services that has 'mt5webapi' prefix in their name. If there's none, return null")
     hydra_services: Optional[List[ServiceStatus]] = Field(description="This includes All service that has word 'hydra' in their name as well as pgbouncer services. If there's none, return null")
-    cli_http_service: Optional[List[ServiceStatus]] = Field(description="A service called 'cli_http_service'. If there's none, return null")
+    cli_http_service: Optional[List[ServiceStatus]] = Field(description="A service called cli_http_service. If there's none, return null")
     crypto_services: Optional[List[ServiceStatus]] = Field(description="All services that has word 'crypto' in their name. If there's none, return null")
     other_services: List[ServiceStatus] = Field(description="Other miscellaneous services")
 
