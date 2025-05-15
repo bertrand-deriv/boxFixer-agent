@@ -3,6 +3,7 @@ import typer
 import os
 import sys
 import time
+import uuid
 from dotenv import load_dotenv
 
 from langchain_community.chat_models import ChatLiteLLM
@@ -93,7 +94,7 @@ graph = create_react_agent(
 )
 
 # Configuration
-config = {"configurable": {"thread_id": "1"}}
+config = {"configurable": {"thread_id": str(uuid.uuid4())}}
 
 @app.command()
 def run_agent():

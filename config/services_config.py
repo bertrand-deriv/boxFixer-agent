@@ -3,10 +3,7 @@ hostname_process = subprocess.run("hostname", shell=True, capture_output=True, t
 hostname = hostname_process.stdout.strip().split('.')[0]
 DEFAULT_SERVICES = [
     "crypto_cashier_paymentapi",
-    "crypto_cashier_fee_estimator",
-    "crypto_cashier_events_stream",
     "crypto_cashier_api",
-    "crypto_payment_processor",
     "binary_events_document_authentication_stream.service",
     "binary_onfido_webhook.service",
     "binary_starman_bom-backoffice.service",
@@ -22,9 +19,16 @@ DEFAULT_SERVICES = [
     "passkeys",
     "deriv-redis-passkeys",
     "deriv-passkeys-gray",
+    "hydra-hydra-chart",
     "pgbouncer",
     "pgbouncer-chart",
-    "pgbouncer-chart-gray"
+    "pgbouncer-chart-gray",
+    "mt5webapi_nginx",
+    "mt5webapi_real_p03_ts01"
+    "mt5webapi_real_p01_ts02",
+    "mt5webapi_real_p01_ts04",
+    "mt5webapi_demo_p01_ts01",
+    "mt5webapi_demo_p01_ts02",
 ]
     
 TROUBLESHOOTING_STEPS_MAP = {

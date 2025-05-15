@@ -12,12 +12,12 @@ def auto_troubleshoot_services_if_needed(structured_output, graph, config, displ
     """
     # Step 1: Check for failing services across all service categories
     failing_services = []
-    service_categories = ["kyc_services", "passkeys_services", "hydra_services", "general_services"]
+    service_categories = ["kyc_services", "passkeys_services", "hydra_services", "mt5_services", "cli_http_service", "crypto_services"]
     
     for category in service_categories:
         services = getattr(structured_output.services, category, []) or []
         category_failing = [
-            {"name": svc.name, "category": category.replace("_services", "")} 
+            {"name": svc.name, "category": category.replace("_services", "").replace("_service", "")} 
             for svc in services 
             if not svc.running or svc.status.lower() in ["error", "not found"]
         ]

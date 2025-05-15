@@ -141,11 +141,17 @@ def display_structured_output(structured_output, console):
     
     kyc_services = structured_output.services.kyc_services or []
     passkeys_services = structured_output.services.passkeys_services or []
+    mt5_services = structured_output.services.mt5_services or []
+    hydra_services = structured_output.services.hydra_services or []
+    cli_http_service = structured_output.services.cli_http_service or []
     crypto_services = structured_output.services.crypto_services or []
     other_services = structured_output.services.other_services or []
     
     all_services.extend(kyc_services)
     all_services.extend(passkeys_services)
+    all_services.extend(mt5_services)
+    all_services.extend(hydra_services)
+    all_services.extend(cli_http_service)
     all_services.extend(crypto_services)
     all_services.extend(other_services)
     
@@ -171,6 +177,21 @@ def display_structured_output(structured_output, console):
         console.print(kyc_table)
         console.print("\n")
         
+    if mt5_services:
+        mt5_table = display_service_category("MT5 Services", mt5_services)
+        console.print(mt5_table)
+        console.print("\n")
+
+    if hydra_services:
+        hydra_table = display_service_category("Hydra Services", hydra_services)
+        console.print(hydra_table)
+        console.print("\n")
+
+    if cli_http_service:
+        qa_script_table = display_service_category("QA script runner Services", cli_http_service)
+        console.print(qa_script_table)
+        console.print("\n")
+
     if passkeys_services:
         passkeys_table = display_service_category("Passkeys Services", passkeys_services)
         console.print(passkeys_table)
