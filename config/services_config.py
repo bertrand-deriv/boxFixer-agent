@@ -3,7 +3,20 @@ hostname_process = subprocess.run("hostname", shell=True, capture_output=True, t
 hostname = hostname_process.stdout.strip().split('.')[0]
 DEFAULT_SERVICES = [
     "crypto_cashier_paymentapi",
+    "crypto_cashier_fee_estimator",
+    "crypto_cashier_events_stream",
+    "crypto_cashier_api",
+    "crypto_payment_processor",
+    "binary_events_document_authentication_stream.service",
+    "binary_onfido_webhook.service",
+    "binary_starman_bom-backoffice.service",
+    "binary_starman_paymentapi.service",
+    "cli_http_service",
     "kyc_identity_verification",
+    "kyc_phone_number_verification",
+    "kyc_receiver",
+    "kyc_identity_verification_scheduler",
+    "kyc_transmitter",
     "service-kyc-rules",
     "service-business-rule",
     "passkeys",
@@ -11,8 +24,7 @@ DEFAULT_SERVICES = [
     "deriv-passkeys-gray",
     "pgbouncer",
     "pgbouncer-chart",
-    "pgbouncer-chart-gray",
-    "dd_agent"
+    "pgbouncer-chart-gray"
 ]
     
 TROUBLESHOOTING_STEPS_MAP = {
@@ -88,40 +100,19 @@ TROUBLESHOOTING_STEPS_MAP = {
             "If all troubleshooting is not helping, You need to ask qa-kyc team"
         ]
     },
-    
-    "payment": {
+    "cli_http_services": {
         "steps": [
             {
-                "name": "Check if service_payment tag exists",
-                "commands": ["cat /etc/chef/chef/tags/qa.json | grep service_payment"]
-            },
-            {
-                "name": "Verify payment service pods are running",
-                "commands": ["kubectl get pods | grep payment-service"]
-            },
-            {
-                "name": "Check payment database connection",
+                "name": "Check if the 'qa_script_runner' is in qa.json, and if not, you need to add it then run chef-client",
                 "commands": [
-                    "kubectl exec -it $(kubectl get pod -l app=payment-service -o jsonpath='{.items[0].metadata.name}') -- env | grep DATABASE",
-                    "kubectl exec -it $(kubectl get pod -l app=payment-service -o jsonpath='{.items[0].metadata.name}') -- curl -s database-host:port"
-                ]
-            },
-            {
-                "name": "Check payment processor connectivity",
-                "commands": [
-                    "kubectl exec -it $(kubectl get pod -l app=payment-service -o jsonpath='{.items[0].metadata.name}') -- curl -s payment-gateway-url/status"
-                ]
+                    "grep 'qa_script_runner' /etc/chef/chef/tags/qa.json",
+                    "jq '.tags += [\"qa_script_runner\"]' /etc/chef/chef/tags/qa.json > temp.json && mv temp.json /etc/chef/chef/tags/qa.json"
+                    ]
             }
         ],
         "common_fixes": [
-            "Add service_payment tag to /etc/chef/chef/tags/qa.json and run chef-client",
-            "Restart payment service: kubectl rollout restart deployment payment-service",
-            "Verify payment database credentials in secrets"
+            "Adding qa_script_runner and running chef client"
         ],
-        "other_tips": [
-            "Payment service requires functioning network connection to payment processor",
-            "Check firewall rules for outbound connections to payment gateway",
-            "Verify SSL certificates for payment gateway are valid"
-        ]
+        "other_tips": []
     }
 }
