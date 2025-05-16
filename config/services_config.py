@@ -37,7 +37,8 @@ TROUBLESHOOTING_STEPS_MAP = {
                 "name": "Check if service_kyc tag exists in tags.json, If not, then it needs to be added",
                 "commands": [
                     "grep 'service_kyc' /etc/chef/chef/tags/qa.json",
-                    "jq '.tags += [\"service_kyc\"]' /etc/chef/chef/tags/qa.json > temp.json && mv temp.json /etc/chef/chef/tags/qa.json"
+                    "jq '.tags += [\"service_kyc\"]' /etc/chef/chef/tags/qa.json > /tmp/temp.json && sudo mv /tmp/temp.json /etc/chef/chef/tags/qa.json",
+                    "Manually run 'sudo chef-client'"
                     ]
             },
             {
@@ -90,7 +91,7 @@ TROUBLESHOOTING_STEPS_MAP = {
         ],
         "common_fixes": [
             "Sometimes you need to update image tag in the service-kyc-rules/values.yaml to the latest",
-            "Add service_kyc tag to /etc/chef/chef/tags/qa.json and run chef-client",
+            "Add service_kyc tag to /etc/chef/chef/tags/qa.json and run sudo chef-client. chef needs to be run manually",
             "Fix missing service folders (if needed) in /home/git/regentmarkets/environment-manifests-qa/k8s",
             "Add this entry in hosts: echo '10.14.20.218 k8s-lb-local.deriv.local' | sudo tee -a /etc/hosts",
             "Restart bsdb: cd /home/git/regentmarkets/bom-postgres-bsdb/kyc && make pgtap.port",
@@ -109,12 +110,13 @@ TROUBLESHOOTING_STEPS_MAP = {
                 "name": "Check if the 'qa_script_runner' is in qa.json, and if not, you need to add it then run chef-client",
                 "commands": [
                     "grep 'qa_script_runner' /etc/chef/chef/tags/qa.json",
-                    "jq '.tags += [\"qa_script_runner\"]' /etc/chef/chef/tags/qa.json > temp.json && mv temp.json /etc/chef/chef/tags/qa.json"
+                    "jq '.tags += [\"qa_script_runner\"]' /etc/chef/chef/tags/qa.json > /tmp/temp.json && sudo mv /tmp/temp.json /etc/chef/chef/tags/qa.json",
+                    "Manually run 'sudo chef-client'"
                     ]
             }
         ],
         "common_fixes": [
-            "Adding qa_script_runner and running chef client"
+            "Adding qa_script_runner and running 'sudo chef-client'. chef-client needs to be run manually"
         ],
         "other_tips": []
     }
