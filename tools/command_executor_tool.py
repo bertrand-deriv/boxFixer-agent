@@ -12,7 +12,7 @@ def execute_shell_command_tool(command: str) -> str:
     Returns:
         str: results as a string
     """
-    # More comprehensive blocklist with regex patterns for dangerous operations
+
     dangerous_patterns = [
         r'\brm\s+-rf\b', r'\bdd\b', r'\bmkfs\b', 
         r'\bchmod\s+777\b', r'\bchown\b', r'\bmkswap\b',
