@@ -6,6 +6,7 @@ DEFAULT_SERVICES = [
     "crypto_cashier_api",
     "binary_events_document_authentication_stream.service",
     "binary_starman_bom-backoffice.service",
+    "binary_onfido_webhook.service",
     "binary_starman_paymentapi.service",
     "cli_http_service",
     "kyc_identity_verification",
@@ -18,7 +19,7 @@ DEFAULT_SERVICES = [
     "passkeys",
     "deriv-redis-passkeys",
     "deriv-passkeys-gray",
-    "hydra",
+    "hydra-hydra-chart",
     "pgbouncer",
     "pgbouncer-chart",
     "pgbouncer-chart-gray",
@@ -102,7 +103,7 @@ TROUBLESHOOTING_STEPS_MAP = {
             "If all troubleshooting is not helping, You need to ask qa-kyc team"
         ]
     },
-    "cli_http_services": {
+    "cli_http_service": {
         "steps": [
             {
                 "name": "Check if the 'qa_script_runner' is in qa.json, and if not, you need to add it then run chef-client",

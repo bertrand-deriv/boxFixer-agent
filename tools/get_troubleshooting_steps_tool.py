@@ -20,11 +20,4 @@ def get_service_troubleshooting_steps(service_name: str) -> dict:
         return TROUBLESHOOTING_STEPS_MAP[service_name]
     else:
         available_services = list(TROUBLESHOOTING_STEPS_MAP.keys())
-        return {
-            "steps": [{
-                "name": f"Service '{service_name}' not found in troubleshooting database",
-                "commands": [f"echo 'Available services: {', '.join(available_services)}'"]
-            }],
-            "common_fixes": ["Verify that the service name is correct"],
-            "other_tips": []
-        }
+        return f"Service '{service_name}' not found in troubleshooting database"

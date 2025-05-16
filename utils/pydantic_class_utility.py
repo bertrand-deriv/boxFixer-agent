@@ -13,7 +13,7 @@ class ResourceStatus(BaseModel):
     disk_usage: str = Field(description="Disk usage")
 
 class ServicesOutput(BaseModel):
-    kyc_services: Optional[List[ServiceStatus]] = Field(description="All services that has word 'kyc' in their name for example: kyc_receiver, kyc_identity_verification, onfido webhook service and 'service-business-rule'. Include any service related to document authentication. If there's none, return null")
+    kyc_services: Optional[List[ServiceStatus]] = Field(description="All services that has word 'kyc' in their name for example: kyc_receiver, kyc_identity_verification, and 'service-business-rule'. Include any service related to document authentication. If there's none, return null")
     passkeys_services: Optional[List[ServiceStatus]] = Field(description="All services that has word 'passkeys' in their name. If there's none, return null")
     mt5_services: Optional[List[ServiceStatus]] = Field(description="All services that has 'mt5webapi' prefix in their name. If there's none, return null")
     hydra_services: Optional[List[ServiceStatus]] = Field(description="This includes All service that has word 'hydra' in their name as well as pgbouncer services. If there's none, return null")

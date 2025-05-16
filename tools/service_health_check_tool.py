@@ -7,7 +7,7 @@ from config.services_config import DEFAULT_SERVICES
 
 # Get the hostname for kubernetes
 hostname_process = subprocess.run("hostname", shell=True, capture_output=True, text=True)
-hostname = hostname_process.stdout.strip().split('.')[0]
+namespace = hostname_process.stdout.strip().split('.')[0]
 
 def check_service_status(service_name: str) -> Dict[str, Any]:
     """Check the status of a specific service"""
@@ -54,34 +54,36 @@ def check_service_status(service_name: str) -> Dict[str, Any]:
                     result["running"] = False
                     result["message"] = f"Docker container exists but is not running: {docker_all_process.stdout.strip()}"
                 else:
-                    # Try checking as a Kubernetes pod
-                    k8s_cmd = f"kubectl get pods --all-namespaces | grep {service_name}"
+                    # Check if the pod exists in the given namespace
+                    k8s_cmd = f"kubectl get pods -n {namespace} | grep {service_name}"
                     k8s_process = subprocess.run(k8s_cmd, shell=True, capture_output=True, text=True)
 
                     
                     if k8s_process.stdout.strip():
                         # Extract pod status from kubectl output
-                        # Format typically: NAMESPACE NAME READY STATUS RESTARTS AGE
+                        # Format typically: NAME READY STATUS RESTARTS AGE
                         pod_info = k8s_process.stdout.strip().split()
                         if len(pod_info) >= 4:
-                            namespace = hostname
-                            pod_status = pod_info[3]
+                            
+                            pod_status = pod_info[2]
+                            pod_restarts = pod_info[3]
+                            pod_age = pod_info[4]
                             
                             if pod_status.lower() == "running":
                                 result["status"] = "ok"
                                 result["running"] = True
-                                result["message"] = f"Kubernetes pod running in namespace {namespace}"
+                                result["message"] = f"Kubernetes pod running in namespace {namespace}.It's been up for {pod_age}. Number of restarts: {pod_restarts}"
                             else:
                                 result["status"] = "warning"
                                 result["running"] = False
-                                result["message"] = f"Kubernetes pod exists but status is: {pod_status}"
+                                result["message"] = f"Kubernetes pod exists in namespace {namespace} but status is: {pod_status}.It's been up for {pod_age}. Number of restarts: {pod_restarts}"
                         else:
                             result["status"] = "warning"
                             result["running"] = False
-                            result["message"] = f"Kubernetes pod found but status unclear: {k8s_process.stdout.strip()}"
+                            result["message"] = f"Kubernetes pod found in namespace {namespace} but status unclear: {pod_status}. It's been up for {pod_age}. Number of restarts: {pod_restarts}"
                     else:
                         result["status"] = "not found"
-                        result["message"] = "Service not found in system services, Docker containers, or Kubernetes pods"
+                        result["message"] = f"Service not found in system services, Docker containers, or Kubernetes pods"
 
         
     except Exception as e:
