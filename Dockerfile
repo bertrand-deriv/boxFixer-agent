@@ -10,8 +10,17 @@ COPY requirements.txt .
 # Install dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
+RUN apt-get update \
+    && apt-get install -y locales fonts-dejavu-core \
+    && echo "en_US.UTF-8 UTF-8" > /etc/locale.gen \
+    && locale-gen
+
 # Copy the rest of the application code (but not venv/)
 COPY . .
 
-# Default command to run your app (edit if needed!)
-CMD [ "python", "agent.py", "run-agent" ]
+COPY entrypoint.py /entrypoint.py
+
+ENV TERM=xterm-256color
+ENV LANG=en_US.UTF-8
+ENV LC_ALL=en_US.UTF-8
+ENTRYPOINT ["python", "/entrypoint.py"]

@@ -76,8 +76,8 @@ prompt = ChatPromptTemplate.from_messages([
 # Initialize LLM
 llm = ChatLiteLLM(
     model_name="gpt-4o",
-    api_base=os.getenv("API_BASE"),
-    api_key=os.getenv("API_KEY")
+    api_base=os.getenv("BOX_API_BASE"),
+    api_key=os.getenv("BOX_API_KEY")
 )
 # Set up tools
 tools = [ get_service_status_tool, execute_shell_command_tool, get_system_resources_tool, get_service_troubleshooting_steps_tool ]

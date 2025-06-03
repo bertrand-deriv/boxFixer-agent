@@ -3,7 +3,7 @@ from dotenv import load_dotenv
 from jinja2 import Template
 
 class PromptManager:
-    def __init__(self, env_prefix="AGENT_"):
+    def __init__(self, env_prefix="BOX_AGENT_"):
         load_dotenv()
         self.templates = {}
 

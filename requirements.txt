@@ -50,3 +50,4 @@ langchain-community
 langchain-openai
 litellm
 langchain
+pyyaml
