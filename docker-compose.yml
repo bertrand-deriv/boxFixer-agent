@@ -1,0 +1,14 @@
+version: "3.3"
+services:
+  boxfixer-agent:
+    build: .
+    image: boxfixer-agent:1.0
+    container_name: boxfixer-agent
+    env_file: .env
+    restart: unless-stopped
+    # If you want to map ports, add:
+    # ports:
+    #   - "5000:5000"
+    # To mount code for hot-reload (dev only):
+    # volumes:
+    #   - .:/app
