@@ -1,6 +1,9 @@
 from rich import print
 from dotenv import load_dotenv
 from config.prompts_config import PromptManager
+from utils.fetch_env import load_env_from_yaml
+
+load_env_from_yaml()
 
 load_dotenv()
 

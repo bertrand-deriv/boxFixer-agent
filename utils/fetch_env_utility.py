@@ -1,0 +1,25 @@
+import os
+import subprocess
+import sys
+import yaml
+
+def install_requirements():
+    if os.path.exists("requirements.txt"):
+        subprocess.check_call(
+            [sys.executable, "-m", "pip", "install", "-r", "requirements.txt", "--quiet"]
+        )
+    else:
+        print(f"[WARNING] No 'requirements.txt' found. Skipping dependency installation.")
+
+def load_env_from_yaml():
+    if not os.path.exists('/etc/rmg/qa_credentials.yml'):
+        print(f"[ERROR] YAML credentials file not found at: '/etc/rmg/qa_credentials.yml'")
+        sys.exit(1)
+
+    with open('/etc/rmg/qa_credentials.yml', 'r') as file:
+        secrets = yaml.safe_load(file)
+
+    if secrets:
+        for k, v in secrets.items():
+            if v is not None:
+                os.environ[str(k)] = str(v)

@@ -25,6 +25,7 @@ from tools.get_troubleshooting_steps_tool import get_service_troubleshooting_ste
 from utils.display_utility import display_markdown_response, display_structured_output
 from utils.pydantic_class_utility import MonitoringReport
 from utils.troubleshoot_service_utility import auto_troubleshoot_services_if_needed
+from utils.fetch_env import install_requirements, load_env_from_yaml
 from config.prompts_config import PromptManager
 
 from rich.align import Align
@@ -33,6 +34,9 @@ from rich.panel import Panel
 from rich import box, print
 
 output_parser = PydanticOutputParser(pydantic_object=MonitoringReport)
+
+install_requirements()
+load_env_from_yaml()
 
 load_dotenv()
 
@@ -165,6 +169,7 @@ def check_services_cmd():
 @app.command()
 def get_tb_steps( service: str = typer.Argument(..., help="e.g: kyc_services, hydra_services, etc")):
     """Get troubleshooting steps for particular services"""
+
     typer.echo(f"\n🔍 Fetching troubleshooting steps for {service}...\n")
     try:
         results = get_service_troubleshooting_steps(service)
