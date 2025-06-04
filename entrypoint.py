@@ -5,12 +5,25 @@ import subprocess
 import sys
 import yaml
 
-YAML_CRED_PATH = '/etc/rmg/qa_credentials.yml'  # Change path as needed
+YAML_CRED_PATH = '/etc/rmg/qa_credentials.yml'
 REQUIREMENTS_FILE = "requirements.txt"
 
 def install_requirements():
     if os.path.exists(REQUIREMENTS_FILE):
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "-r", REQUIREMENTS_FILE])
+        print("[INFO] Installing Python requirements (no output unless there is an error)...")
+        try:
+            # Capture stdout and stderr
+            result = subprocess.run(
+                [sys.executable, "-m", "pip", "install", "-r", REQUIREMENTS_FILE, "--quiet"],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+        except subprocess.CalledProcessError as e:
+            print("[ERROR] Requirements installation failed!")
+            print("stdout:\n", e.stdout)
+            print("stderr:\n", e.stderr)
+            sys.exit(e.returncode)
     else:
         print(f"[WARNING] No {REQUIREMENTS_FILE} found. Skipping dependency installation.")
 
