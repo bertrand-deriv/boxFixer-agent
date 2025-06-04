@@ -4,12 +4,17 @@ import sys
 import yaml
 
 def install_requirements():
-    if os.path.exists("requirements.txt"):
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.abspath(os.path.join(script_dir, ".."))
+    req_path = os.path.join(project_root, "requirements.txt")
+
+    if os.path.exists(req_path):
         subprocess.check_call(
-            [sys.executable, "-m", "pip", "install", "-r", "requirements.txt", "--quiet"]
+            [sys.executable, "-m", "pip", "install", "-r", req_path , "--quiet"]
         )
     else:
-        print(f"[WARNING] No 'requirements.txt' found. Skipping dependency installation.")
+        print("CWD:", os.getcwd())
+        print(f"[WARNING] No 'requirements.txt' found at {req_path}. Skipping dependency installation.")
 
 def load_env_from_yaml():
     if not os.path.exists('/etc/rmg/qa_credentials.yml'):
