@@ -197,4 +197,3 @@ if __name__ == "__main__":
     console.print(start_panel)
     console.print("\n")
     app()
-
