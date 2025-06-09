@@ -1,16 +1,17 @@
 import os
-from dotenv import load_dotenv
 from jinja2 import Template
+import yaml
 
 class PromptManager:
     def __init__(self, env_prefix="BOX_AGENT_"):
-        load_dotenv()
+        with open("config/prompts.yaml") as f:
+            PROMPTS = yaml.safe_load(f)
         self.templates = {}
 
-        for key, value in os.environ.items():
+        for key, value in PROMPTS.items():
             if key.startswith(env_prefix) and key.endswith("_PROMPT"):
                 name = key[len(env_prefix):-7].lower()
-                self.templates[name] = value.replace("\\n", "\n")
+                self.templates[name] = value
 
     def get_prompt(self, template_name, **kwargs):
         if template_name not in self.templates:

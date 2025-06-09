@@ -25,7 +25,7 @@ from tools.get_troubleshooting_steps_tool import get_service_troubleshooting_ste
 from utils.display_utility import display_markdown_response, display_structured_output
 from utils.pydantic_class_utility import MonitoringReport
 from utils.troubleshoot_service_utility import auto_troubleshoot_services_if_needed
-from utils.fetch_env_utility import install_requirements, load_env_from_yaml
+from utils.fetch_env_utility import load_env_from_yaml
 from config.prompts_config import PromptManager
 
 from rich.align import Align
@@ -35,7 +35,6 @@ from rich import box, print
 
 output_parser = PydanticOutputParser(pydantic_object=MonitoringReport)
 
-install_requirements()
 load_env_from_yaml()
 
 load_dotenv()
