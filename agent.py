@@ -39,6 +39,8 @@ load_env_from_yaml()
 
 load_dotenv()
 
+os.environ["BOX_API_BASE"] = "https://litellm.deriv.ai/v1"
+
 app = typer.Typer()
 
 console = Console()
