@@ -40,6 +40,9 @@ load_env_from_yaml()
 load_dotenv()
 
 os.environ["BOX_API_BASE"] = "https://litellm.deriv.ai/v1"
+os.environ["LANGSMITH_TRACING"] = 'true'
+os.environ["LANGSMITH_ENDPOINT"] = "https://api.smith.langchain.com"
+os.environ["LANGSMITH_PROJECT"] = "pr-another-mass-78"
 
 app = typer.Typer()
 
