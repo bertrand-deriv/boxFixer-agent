@@ -7,7 +7,7 @@ BoxFixer Agent is a DevOps assistant designed to monitor logs, check service hea
 - Comphrensive initial qabox diagnosis
 - Health checks for multiple services
 - CPU, memory, and disk usage reporting
-- Service troubleshooting 
+- Service troubleshooting assistance
 - Interactive CLI powered by [Typer](https://typer.tiangolo.com/)  
 - Extensible toolset architecture
 
@@ -22,7 +22,7 @@ BoxFixer Agent is a DevOps assistant designed to monitor logs, check service hea
 1. Clone the repo and go to its directory
 2. Install required packages. `pip install -r requirements.txt`
 3. Make sure you have all the env variables in `.env` file. You just need 2 secrets as mentioned below
-4. Run `python3 agent.py run-agent`
+4. Run `python3 agent.py run-agent` to start the app
 
 ## How to contribute:
 
