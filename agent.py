@@ -18,7 +18,6 @@ from langgraph.prebuilt import create_react_agent
 
 from tools.log_monitor_tool import check_logs_once
 from tools.service_health_check_tool import check_services
-from tools.command_executor_tool import execute_shell_command_tool
 from tools.resource_monitoring_tool import check_system_resources
 from tools.get_troubleshooting_steps_tool import get_service_troubleshooting_steps
 
@@ -88,7 +87,7 @@ llm = ChatLiteLLM(
     api_key=os.getenv("BOX_API_KEY")
 )
 # Set up tools
-tools = [ get_service_status_tool, execute_shell_command_tool, get_system_resources_tool, get_service_troubleshooting_steps_tool ]
+tools = [ get_service_status_tool, get_system_resources_tool, get_service_troubleshooting_steps_tool ]
 
 # Initialize memory
 memory = MemorySaver()
