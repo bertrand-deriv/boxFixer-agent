@@ -1,6 +1,6 @@
 # BoxFixer Agent
 
-BoxFixer Agent is a DevOps assistant designed to monitor logs, check service health, gather system resource metrics, and provide troubleshooting guidance for services running in the QABOX (test environment). It leverages a lightweight LLM (via LangGraph/LangChain) to automate diagnostic workflows, present structured reports, and, when needed, execute shell commands. It also integrates with LangSmith for agent activity monitoring.
+BoxFixer Agent is a DevOps assistant designed to monitor logs, check service health, gather system resource metrics, and provide troubleshooting guidance for services running in the QABOX (test environment). It leverages a lightweight LLM (via LangGraph/LangChain) to automate diagnostic workflows and present structured reports. It also integrates with LangSmith for agent activity monitoring.
 
 ## Features
 
