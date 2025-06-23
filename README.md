@@ -21,7 +21,7 @@ BoxFixer Agent is a DevOps assistant designed to monitor logs, check service hea
 
 1. Clone the repo and go to its directory
 2. Install required packages. `pip install -r requirements.txt`
-3. Make sure you have all the env variables in `.env` file
+3. Make sure you have all the env variables in `.env` file. You just need 2 secrets as mentioned below
 4. Run `python3 agent.py run-agent`
 
 ## How to contribute:
@@ -53,20 +53,12 @@ Available commands:
 - `check-sys-resources`  
   Reports current CPU, memory, and disk usage.
 
-**Credentials are set in QABOX by default (in `/etc/rmg/qa_credentials.yml`). Incase you want to modify these secrets, especially the API_KEY that expires,  you can test and exercise with it using `.env` file. Then later ask the DevOps team via `#need_help_qabox_issues` to update the secret.
+**Credentials are set in QABOX by default (in `/etc/rmg/qa_credentials.yml`). Incase you want to modify these secrets, especially the BOX_API_KEY that expires,  you can test and exercise with it using `.env` file. Then later ask the DevOps team via `#need_help_qabox_issues` to update the secret.
 Here's the list off all secrets required.**
 
    ```text
-   API_BASE=<your-api-base-url>
-   API_KEY=<your-api-key>
-   LANGSMITH_TRACING=true
-   OPENAI_API_KEY=<your-openai-key>
-   LANGSMITH_ENDPOINT=<langsmith-endpoint>
+   BOX_API_KEY=<your-openai-key>
    LANGSMITH_API_KEY=<langsmith-api-key>
-   LANGSMITH_PROJECT=<langsmith-project-id>
-   AGENT_SYSTEM_PROMPT=<system prompt>
-   AGENT_INITIAL_PROMPT=<initial prompt>
-   AGENT_TROUBLESHOOT_PROMPT=<troubleshooting prompt>
    ```
 
 ## Configuration
